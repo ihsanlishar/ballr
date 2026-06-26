@@ -1,0 +1,11 @@
+flask
+requests
+streamlit
+python-dotenv
+numpy
+scipy
+plotly
+pandas
+pyrebase4
+ibm-watsonx-ai
+cachetools
