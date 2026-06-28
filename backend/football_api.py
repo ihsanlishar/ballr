@@ -11,15 +11,34 @@ HEADERS = {'X-Auth-Token': API_KEY}
 
 cache = TTLCache(maxsize=128, ttl=300)
 
+COMP_WEIGHTS = {
+    'FIFA World Cup': 1.0,
+    'UEFA Champions League': 0.90,
+    'UEFA Europa League': 0.75,
+    'Primera Division': 0.85,
+    'Premier League': 0.85,
+    'Bundesliga': 0.85,
+    'Serie A': 0.85,
+    'Ligue 1': 0.85,
+    'Eredivisie': 0.75,
+    'Primeira Liga': 0.75,
+    'Championship': 0.60,
+    'Copa Libertadores': 0.80,
+    'European Championship': 0.95,
+}
+DEFAULT_COMP_WEIGHT = 0.65
+
 @cached(cache)
 def get_fixtures():
     r = requests.get(f'{BASE_URL}/competitions/WC/matches', headers=HEADERS)
-    data = r.json()
-    return data.get('matches', [])
+    return r.json().get('matches', [])
 
 @cached(cache)
 def get_team_stats(team_id):
-    r = requests.get(f'{BASE_URL}/teams/{team_id}/matches?limit=10', headers=HEADERS)
+    r = requests.get(
+        f'{BASE_URL}/teams/{team_id}/matches?limit=20&status=FINISHED',
+        headers=HEADERS
+    )
     return r.json()
 
 @cached(cache)
@@ -32,41 +51,160 @@ def get_top_scorers():
     r = requests.get(f'{BASE_URL}/competitions/WC/scorers', headers=HEADERS)
     return r.json()
 
-def parse_team_form(matches, team_id):
-    results = []
-    goals_scored = []
-    goals_conceded = []
+@cached(cache)
+def get_wc_team_record(team_id):
+    standings = get_standings()
+    for group in standings.get('standings', []):
+        for entry in group.get('table', []):
+            if entry['team']['id'] == team_id:
+                return {
+                    'played': entry['playedGames'],
+                    'won': entry['won'],
+                    'drawn': entry['drawn'],
+                    'lost': entry['lost'],
+                    'goals_for': entry['goalsFor'],
+                    'goals_against': entry['goalsAgainst'],
+                    'goal_diff': entry['goalDifference'],
+                    'points': entry['points'],
+                    'group': group.get('group', '')
+                }
+    return None
 
-    for m in matches.get('matches', []):
-        if m['status'] != 'FINISHED':
-            continue
+def parse_team_form(matches_data, team_id):
+    matches = matches_data.get('matches', [])
+    finished = [m for m in matches if m['status'] == 'FINISHED']
+    finished = sorted(finished, key=lambda m: m['utcDate'], reverse=True)
+
+    if not finished:
+        return _default_stats()
+
+    results = []
+    weighted_gf = []
+    weighted_ga = []
+    clean_sheets = 0
+    total_weight = 0
+
+    for i, m in enumerate(finished):
         home = m['homeTeam']['id'] == team_id
         score = m['score']['fullTime']
         gf = score['home'] if home else score['away']
         ga = score['away'] if home else score['home']
         if gf is None or ga is None:
             continue
-        goals_scored.append(gf)
-        goals_conceded.append(ga)
-        if gf > ga:
-            results.append('W')
-        elif gf == ga:
-            results.append('D')
-        else:
-            results.append('L')
 
-    last5 = ''.join(results[-5:]) if len(results) >= 5 else ''.join(results)
-    wins = results.count('W')
-    draws = results.count('D')
-    losses = results.count('L')
-    gpg = sum(goals_scored) / len(goals_scored) if goals_scored else 1.2
-    cpg = sum(goals_conceded) / len(goals_conceded) if goals_conceded else 1.0
+        comp_name = m.get('competition', {}).get('name', '')
+        comp_w = COMP_WEIGHTS.get(comp_name, DEFAULT_COMP_WEIGHT)
+        recency_w = 0.85 ** i
+        weight = comp_w * recency_w
+        total_weight += weight
+
+        weighted_gf.append(gf * weight)
+        weighted_ga.append(ga * weight)
+
+        if ga == 0:
+            clean_sheets += 1
+
+        if gf > ga: results.append('W')
+        elif gf == ga: results.append('D')
+        else: results.append('L')
+
+    if not results or total_weight == 0:
+        return _default_stats()
+
+    n = len(results)
+    wpg = sum(weighted_gf) / total_weight
+    cpg = sum(weighted_ga) / total_weight
+    gd_per_game = wpg - cpg
+
+    wc_matches = [m for m in finished
+                  if m.get('competition', {}).get('name') == 'FIFA World Cup']
+    wc_form = []
+    for m in wc_matches[:3]:
+        home = m['homeTeam']['id'] == team_id
+        score = m['score']['fullTime']
+        gf = score['home'] if home else score['away']
+        ga = score['away'] if home else score['home']
+        if gf is None or ga is None: continue
+        if gf > ga: wc_form.append('W')
+        elif gf == ga: wc_form.append('D')
+        else: wc_form.append('L')
 
     return {
-        'wins': wins,
-        'draws': draws,
-        'losses': losses,
-        'goals_per_game': gpg,
-        'conceded_per_game': cpg,
-        'form_string': last5
+        'wins': results.count('W'),
+        'draws': results.count('D'),
+        'losses': results.count('L'),
+        'played': n,
+        'win_rate': round(results.count('W') / n, 3),
+        'goals_per_game': round(wpg, 3),
+        'conceded_per_game': round(cpg, 3),
+        'clean_sheet_rate': round(clean_sheets / n, 3),
+        'gd_per_game': round(gd_per_game, 3),
+        'form_string': ''.join(results[:5]),
+        'wc_form': ''.join(wc_form) or ''.join(results[:5]),
+        'sample_size': n,
     }
+
+def _default_stats():
+    return {
+        'wins': 0, 'draws': 0, 'losses': 0, 'played': 0,
+        'win_rate': 0.33, 'goals_per_game': 1.2,
+        'conceded_per_game': 1.2, 'clean_sheet_rate': 0.2,
+        'gd_per_game': 0.0, 'form_string': '', 'wc_form': '',
+        'sample_size': 0,
+    }
+
+@cached(cache)
+def get_match_events(home_team, away_team):
+    """Fetch goal scorers and cards from Google via SerpAPI."""
+    try:
+        serpapi_key = os.getenv('SERPAPI_KEY')
+        if not serpapi_key:
+            return None
+        
+        query = f"{home_team} vs {away_team} 2026 World Cup"
+        r = requests.get(
+            'https://serpapi.com/search.json',
+            params={
+                'q': query,
+                'api_key': serpapi_key,
+                'engine': 'google',
+                'device': 'desktop'
+            },
+            timeout=10
+        )
+        data = r.json()
+        
+        spotlight = data.get('sports_results', {}).get('game_spotlight', {})
+        if not spotlight:
+            return None
+        
+        teams = spotlight.get('teams', [])
+        result = {}
+        
+        for team in teams:
+            name = team.get('name', '')
+            goals = []
+            for scorer in team.get('goal_summary', []):
+                player = scorer.get('player', {}).get('name', '')
+                for g in scorer.get('goals', []):
+                    minute = g.get('in_game_time', {}).get('minute')
+                    goals.append({'player': player, 'minute': minute})
+            
+            red_cards = []
+            for card in team.get('red_cards_summary', []):
+                player = card.get('player', {}).get('name', '')
+                for c in card.get('cards', []):
+                    minute = c.get('in_game_time', {}).get('minute')
+                    red_cards.append({'player': player, 'minute': minute})
+            
+            result[name] = {
+                'goals': sorted(goals, key=lambda x: x['minute'] or 0),
+                'red_cards': red_cards
+            }
+        
+        result['venue'] = spotlight.get('venue', '')
+        result['stage'] = spotlight.get('stage', '')
+        return result
+    
+    except Exception as e:
+        return None

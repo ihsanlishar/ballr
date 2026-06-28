@@ -1,5 +1,5 @@
 from flask import Flask, jsonify
-from football_api import get_fixtures, get_team_stats, get_standings, get_top_scorers, parse_team_form
+from football_api import get_fixtures, get_team_stats, get_standings, get_top_scorers, parse_team_form, get_match_events
 from nlu_api import get_both_team_nlu
 from monte_carlo import run_simulation
 
@@ -39,11 +39,25 @@ def match(home_id, away_id):
 
     simulation = run_simulation(home_stats, away_stats, nlu['team1'], nlu['team2'])
 
+    # Get goal scorers for finished matches
+    fixtures = get_fixtures()
+    match_info = next((f for f in fixtures 
+                       if f['homeTeam']['id'] == home_id 
+                       and f['awayTeam']['id'] == away_id), None)
+    
+    events = None
+    if match_info and match_info.get('status') == 'FINISHED':
+        events = get_match_events(
+            match_info['homeTeam']['name'],
+            match_info['awayTeam']['name']
+        )
+
     return jsonify({
         'home_stats': home_stats,
         'away_stats': away_stats,
         'nlu': nlu,
-        'simulation': simulation
+        'simulation': simulation,
+        'events': events
     })
 
 @app.route('/standings')
@@ -55,4 +69,4 @@ def top_scorers():
     return jsonify(get_top_scorers())
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

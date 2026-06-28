@@ -1,0 +1,7 @@
+flask
+requests
+python-dotenv
+numpy
+scipy
+cachetools
+ibm-watsonx-ai
