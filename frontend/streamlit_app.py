@@ -246,11 +246,10 @@ def fmt_date_local(iso):
 def get_match_local_date(iso):
     try:
         dt_utc = datetime.fromisoformat(iso.replace('Z', '+00:00'))
-        dt_local = dt_utc.astimezone(get_local_tz())
-        return dt_local.date()
+        return dt_utc.date()
     except:
         return None
-
+    
 def fmt_stage(stage):
     return {
         'GROUP_STAGE':'Group Stage','LAST_32':'Round of 32','LAST_16':'Round of 16',
@@ -918,7 +917,8 @@ def show_home():
             return
 
     fixtures = [f for f in fixtures if f['home'] and f['away']]
-    today = date.today()
+    from datetime import timezone
+    today = datetime.now(timezone.utc).date()
     knockout_stages = {'LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','THIRD_PLACE','FINAL'}
 
     def render_grid(matches, tab_key):
