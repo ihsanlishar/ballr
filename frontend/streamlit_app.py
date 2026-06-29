@@ -347,132 +347,289 @@ def render_donut_with_boxes(home_team, away_team, p1, pd_, p2):
             unsafe_allow_html=True
         )
 
-# ── Chart: Statistical Comparison (4 subplots, individually scaled) ────────
-def chart_stats_comparison(home_team, away_team, home_stats, away_stats):
+# ── Chart: Radar — overall team profile ───────────────────────────────────
+def chart_radar(home_team, away_team, home_stats, away_stats):
+    c1 = get_team_color(home_team, other_team=away_team)
+    c2 = get_team_color(away_team, other_team=home_team)
+
+    def form_points_norm(form_str):
+        raw = sum(3 if r == 'W' else 1 if r == 'D' else 0 for r in form_str)
+        return round(min(raw / 15 * 10, 10), 2)  # normalise to 0–10
+
+    categories = ['Win Rate', 'Goals Scored', 'Goals Conceded\n(inverted)', 'Clean Sheet Rate', 'Recent Form']
+
+    def scores(s):
+        return [
+            round(s['win_rate'] * 10, 2),
+            round(min(s['goals_per_game'] / 3.5 * 10, 10), 2),
+            round(max(0, 10 - (s['conceded_per_game'] / 3.5 * 10)), 2),
+            round(s['clean_sheet_rate'] * 10, 2),
+            form_points_norm(s.get('form_string', '')),
+        ]
+
+    h_scores = scores(home_stats)
+    a_scores = scores(away_stats)
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatterpolar(
+        r=h_scores + [h_scores[0]],
+        theta=categories + [categories[0]],
+        fill='toself',
+        fillcolor=hex_to_rgba(c1, 0.15),
+        line=dict(color=c1, width=2),
+        name=home_team,
+        hovertemplate='<b>' + home_team + '</b><br>%{theta}: %{r:.1f}/10<extra></extra>',
+    ))
+
+    fig.add_trace(go.Scatterpolar(
+        r=a_scores + [a_scores[0]],
+        theta=categories + [categories[0]],
+        fill='toself',
+        fillcolor=hex_to_rgba(c2, 0.15),
+        line=dict(color=c2, width=2),
+        name=away_team,
+        hovertemplate='<b>' + away_team + '</b><br>%{theta}: %{r:.1f}/10<extra></extra>',
+    ))
+
+    fig.update_layout(
+        height=340,
+        paper_bgcolor='#0d1526',
+        plot_bgcolor='#0d1526',
+        polar=dict(
+            bgcolor='#080d18',
+            radialaxis=dict(
+                visible=True, range=[0, 10],
+                tickfont=dict(size=8, color='#3d4f6b'),
+                gridcolor='#131e30',
+                linecolor='#131e30',
+                tickvals=[2, 4, 6, 8, 10],
+            ),
+            angularaxis=dict(
+                tickfont=dict(size=10, color='#64748b', family='Inter, sans-serif'),
+                gridcolor='#131e30',
+                linecolor='#1e2d45',
+            ),
+        ),
+        font=dict(family='Inter, sans-serif', color='#94a3b8', size=11),
+        margin=dict(l=48, r=48, t=48, b=48),
+        showlegend=True,
+        legend=dict(
+            orientation='h', yanchor='bottom', y=-0.15, xanchor='center', x=0.5,
+            font=dict(size=11, color='#94a3b8'), bgcolor='rgba(0,0,0,0)',
+        ),
+    )
+    return fig
+
+
+# ── Chart: Horizontal duel bars — head-to-head stat comparison ─────────────
+def chart_duel_bars(home_team, away_team, home_stats, away_stats):
     c1 = get_team_color(home_team, other_team=away_team)
     c2 = get_team_color(away_team, other_team=home_team)
 
     def form_points(form_str):
         return sum(3 if r == 'W' else 1 if r == 'D' else 0 for r in form_str)
 
-    def def_solidity(cpg):
-        return round(max(0, 10 - (cpg * 2.5)), 2)
-
-    def attack_eff(stats):
-        return round(stats['goals_per_game'] * (0.5 + stats['win_rate']), 2)
-
-    stats_config = [
-        {
-            'label': 'Win Rate %',
-            'home':  round(home_stats['win_rate'] * 100, 1),
-            'away':  round(away_stats['win_rate'] * 100, 1),
-            'suffix': '%',
-        },
-        {
-            'label': 'Form Points',
-            'sublabel': 'last 5 games · max 15',
-            'home':  form_points(home_stats.get('form_string', '')),
-            'away':  form_points(away_stats.get('form_string', '')),
-            'suffix': 'pts',
-        },
-        {
-            'label': 'Attack Efficiency',
-            'sublabel': 'goals × win rate',
-            'home':  attack_eff(home_stats),
-            'away':  attack_eff(away_stats),
-            'suffix': '',
-        },
-        {
-            'label': 'Defensive Solidity',
-            'sublabel': 'lower conceded = higher',
-            'home':  def_solidity(home_stats['conceded_per_game']),
-            'away':  def_solidity(away_stats['conceded_per_game']),
-            'suffix': '',
-        },
+    metrics = [
+        ('Win Rate',          round(home_stats['win_rate'] * 100, 1),        round(away_stats['win_rate'] * 100, 1),        '%'),
+        ('Goals / Game',      round(home_stats['goals_per_game'], 2),         round(away_stats['goals_per_game'], 2),         ''),
+        ('Conceded / Game',   round(home_stats['conceded_per_game'], 2),      round(away_stats['conceded_per_game'], 2),      ''),
+        ('Clean Sheet Rate',  round(home_stats['clean_sheet_rate'] * 100, 1), round(away_stats['clean_sheet_rate'] * 100, 1), '%'),
+        ('Form Points',       form_points(home_stats.get('form_string', '')), form_points(away_stats.get('form_string', '')), '/15'),
+        ('GD / Game',         round(home_stats['gd_per_game'], 2),            round(away_stats['gd_per_game'], 2),            ''),
     ]
 
-    fig = make_subplots(
-        rows=1, cols=4,
-        subplot_titles=[s['label'] for s in stats_config],
-        horizontal_spacing=0.10,
-    )
+    labels   = [m[0] for m in metrics]
+    h_vals   = [m[1] for m in metrics]
+    a_vals   = [m[2] for m in metrics]
+    suffixes = [m[3] for m in metrics]
 
-    for i, stat in enumerate(stats_config, start=1):
-        hv = stat['home']
-        av = stat['away']
+    # For each metric, work out the "share" of the combined total for proportional bars
+    # Conceded/Game is inverted — lower is better
+    inverted = {'Conceded / Game'}
 
-        min_val = min(hv, av)
-        max_val = max(hv, av)
-        diff    = max_val - min_val
-        padding = diff * 0.5 if diff > 0 else max_val * 0.25 if max_val > 0 else 1
-        y_min   = max(0, min_val - padding)
-        y_max   = max_val + padding
+    fig = go.Figure()
+
+    for i, (label, hv, av, sfx) in enumerate(metrics):
+        total = hv + av if (hv + av) > 0 else 1
+        h_pct = hv / total * 100
+        a_pct = av / total * 100
+
+        # For inverted metrics, flip the advantage colour
+        h_better = (hv < av) if label in inverted else (hv >= av)
 
         fig.add_trace(go.Bar(
             name=home_team,
-            x=[home_team],
-            y=[hv],
-            marker_color=hex_to_rgba(c1, 0.85),
-            marker_line=dict(color=c1, width=1),
-            showlegend=(i == 1),
-            hovertemplate=f'<b>{home_team}</b><br>{hv}{stat["suffix"]}<extra></extra>',
-            width=0.4,
-        ), row=1, col=i)
+            x=[h_pct],
+            y=[label],
+            orientation='h',
+            marker_color=hex_to_rgba(c1, 0.85 if h_better else 0.35),
+            marker_line=dict(color=c1, width=0),
+            showlegend=(i == 0),
+            hovertemplate=f'<b>{home_team}</b> · {label}<br>{hv}{sfx}<extra></extra>',
+            width=0.5,
+        ))
 
         fig.add_trace(go.Bar(
             name=away_team,
-            x=[away_team],
-            y=[av],
-            marker_color=hex_to_rgba(c2, 0.85),
-            marker_line=dict(color=c2, width=1),
-            showlegend=(i == 1),
-            hovertemplate=f'<b>{away_team}</b><br>{av}{stat["suffix"]}<extra></extra>',
-            width=0.4,
-        ), row=1, col=i)
+            x=[a_pct],
+            y=[label],
+            orientation='h',
+            marker_color=hex_to_rgba(c2, 0.85 if not h_better else 0.35),
+            marker_line=dict(color=c2, width=0),
+            showlegend=(i == 0),
+            hovertemplate=f'<b>{away_team}</b> · {label}<br>{av}{sfx}<extra></extra>',
+            width=0.5,
+        ))
 
-        fig.update_yaxes(
-            range=[y_min, y_max],
-            showgrid=True, gridcolor='#0f1626',
-            zeroline=False,
-            tickfont=dict(color='#3d4f6b', size=9),
-            row=1, col=i
+        # Value annotations — home on left, away on right
+        fig.add_annotation(
+            x=0, y=label,
+            text=f'<b>{hv}{sfx}</b>',
+            xanchor='right', xshift=-8,
+            font=dict(size=10, color=c1, family='Inter, sans-serif'),
+            showarrow=False,
         )
-        fig.update_xaxes(
-            showgrid=False,
-            tickfont=dict(color='#3d4f6b', size=10),
-            row=1, col=i
+        fig.add_annotation(
+            x=100, y=label,
+            text=f'<b>{av}{sfx}</b>',
+            xanchor='left', xshift=8,
+            font=dict(size=10, color=c2, family='Inter, sans-serif'),
+            showarrow=False,
         )
 
     fig.update_layout(
-        height=300,
+        height=320,
         paper_bgcolor='#0d1526',
         plot_bgcolor='#0d1526',
+        barmode='stack',
+        xaxis=dict(
+            visible=False, range=[0, 100],
+        ),
+        yaxis=dict(
+            tickfont=dict(size=10, color='#64748b', family='Inter, sans-serif'),
+            showgrid=False,
+            autorange='reversed',
+        ),
         font=dict(family='Inter, sans-serif', color='#94a3b8', size=11),
-        margin=dict(l=16, r=16, t=52, b=16),
+        margin=dict(l=130, r=60, t=36, b=16),
         showlegend=True,
         legend=dict(
-            orientation='h', yanchor='bottom', y=1.08, xanchor='right', x=1,
-            font=dict(size=11, color='#94a3b8'), bgcolor='rgba(0,0,0,0)'
+            orientation='h', yanchor='bottom', y=1.04, xanchor='center', x=0.5,
+            font=dict(size=11, color='#94a3b8'), bgcolor='rgba(0,0,0,0)',
         ),
-        barmode='group',
+    )
+    return fig
+
+
+# ── Chart: Goals scored vs conceded grouped bar ────────────────────────────
+def chart_goals_bar(home_team, away_team, home_stats, away_stats):
+    c1 = get_team_color(home_team, other_team=away_team)
+    c2 = get_team_color(away_team, other_team=home_team)
+
+    categories = ['Goals Scored / Game', 'Goals Conceded / Game']
+    h_vals = [round(home_stats['goals_per_game'], 2), round(home_stats['conceded_per_game'], 2)]
+    a_vals = [round(away_stats['goals_per_game'], 2), round(away_stats['conceded_per_game'], 2)]
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Bar(
+        name=home_team,
+        x=categories,
+        y=h_vals,
+        marker_color=[hex_to_rgba(c1, 0.85), hex_to_rgba(c1, 0.4)],
+        marker_line=dict(color=c1, width=1),
+        hovertemplate='<b>' + home_team + '</b><br>%{x}: %{y}<extra></extra>',
+        width=0.3,
+    ))
+
+    fig.add_trace(go.Bar(
+        name=away_team,
+        x=categories,
+        y=a_vals,
+        marker_color=[hex_to_rgba(c2, 0.85), hex_to_rgba(c2, 0.4)],
+        marker_line=dict(color=c2, width=1),
+        hovertemplate='<b>' + away_team + '</b><br>%{x}: %{y}<extra></extra>',
+        width=0.3,
+    ))
+
+    # Subtle reference line at 1.2 (average WC goals/game)
+    fig.add_hline(
+        y=1.2, line_dash='dot', line_color='#1e2d45', line_width=1,
+        annotation_text='WC avg', annotation_font_size=9,
+        annotation_font_color='#3d4f6b', annotation_position='top right',
     )
 
-    for ann in fig.layout.annotations:
-        ann.font = dict(size=10, color='#3d4f6b', family='Inter, sans-serif')
-
-    for i, stat in enumerate(stats_config):
-        if stat.get('sublabel'):
-            x_pos = (i * (1.0 / 4)) + (0.5 / 4)
-            fig.add_annotation(
-                text=stat['sublabel'],
-                x=x_pos, y=1.04,
-                xref='paper', yref='paper',
-                showarrow=False,
-                font=dict(size=8, color='#3d4f6b'),
-                xanchor='center',
-            )
-
+    fig.update_layout(
+        height=280,
+        paper_bgcolor='#0d1526',
+        plot_bgcolor='#0d1526',
+        barmode='group',
+        xaxis=dict(
+            tickfont=dict(size=10, color='#64748b', family='Inter, sans-serif'),
+            showgrid=False,
+        ),
+        yaxis=dict(
+            tickfont=dict(size=9, color='#3d4f6b'),
+            showgrid=True, gridcolor='#0f1626',
+            zeroline=False,
+        ),
+        font=dict(family='Inter, sans-serif', color='#94a3b8', size=11),
+        margin=dict(l=32, r=16, t=36, b=16),
+        showlegend=True,
+        legend=dict(
+            orientation='h', yanchor='bottom', y=1.04, xanchor='center', x=0.5,
+            font=dict(size=11, color='#94a3b8'), bgcolor='rgba(0,0,0,0)',
+        ),
+    )
     return fig
+
+
+# ── Render all 3 stat charts with headers ─────────────────────────────────
+def chart_stats_comparison(home_team, away_team, home_stats, away_stats):
+    """
+    Renders three distinct visualisations:
+      1. Radar — overall team profile across 5 dimensions
+      2. Horizontal duel bars — proportional head-to-head on 6 metrics
+      3. Grouped bar — goals scored vs conceded side by side
+    Called from show_finished_match and show_upcoming_match.
+    Returns nothing — renders directly via st.
+    """
+    c1 = get_team_color(home_team, other_team=away_team)
+    c2 = get_team_color(away_team, other_team=home_team)
+
+    # ── Row 1: Radar + Duel bars side by side ──────────────────────────────
+    col_r, col_d = st.columns([1, 1])
+
+    with col_r:
+        st.markdown(f"""
+        <div style="margin-bottom:4px">
+            <span style="font-size:0.65rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#3d4f6b">Team Profile Radar</span><br>
+            <span style="font-size:0.72rem;color:#2a3a52">Normalised 0–10 across 5 dimensions</span>
+        </div>
+        """, unsafe_allow_html=True)
+        st.plotly_chart(chart_radar(home_team, away_team, home_stats, away_stats),
+                        use_container_width=True, config={'displayModeBar': False})
+
+    with col_d:
+        st.markdown(f"""
+        <div style="margin-bottom:4px">
+            <span style="font-size:0.65rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#3d4f6b">Head-to-Head Metrics</span><br>
+            <span style="font-size:0.72rem;color:#2a3a52">Brighter bar = stronger side · conceded is inverted</span>
+        </div>
+        """, unsafe_allow_html=True)
+        st.plotly_chart(chart_duel_bars(home_team, away_team, home_stats, away_stats),
+                        use_container_width=True, config={'displayModeBar': False})
+
+    # ── Row 2: Goals bar full width ────────────────────────────────────────
+    st.markdown(f"""
+    <div style="margin-top:8px;margin-bottom:4px">
+        <span style="font-size:0.65rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#3d4f6b">Goals Scored vs Conceded</span><br>
+        <span style="font-size:0.72rem;color:#2a3a52">Per game average · solid = scored, faded = conceded · dotted line = World Cup average (1.2)</span>
+    </div>
+    """, unsafe_allow_html=True)
+    st.plotly_chart(chart_goals_bar(home_team, away_team, home_stats, away_stats),
+                    use_container_width=True, config={'displayModeBar': False})
 
 # ── Chart: Score Probability Heatmap ──────────────────────────────────────
 def chart_score_heatmap(home_team, away_team, score_dist, actual_score=None):
@@ -643,224 +800,7 @@ def render_form_blocks(home_team, away_team, hs, aws):
             </div>
             """, unsafe_allow_html=True)
 
-# ── LIVE TICKER ────────────────────────────────────────────────────────────
-def render_ticker(fixtures):
-    from datetime import datetime, timezone
-
-    finished       = [f for f in fixtures if f['status'] == 'FINISHED']
-    live           = [f for f in fixtures if f['status'] in ('IN_PLAY', 'PAUSED')]
-    upcoming       = [f for f in fixtures if f['status'] not in ('FINISHED', 'IN_PLAY', 'PAUSED')]
-
-    def safe_dt(f):
-        try:
-            return datetime.fromisoformat(f['date'].replace('Z', '+00:00'))
-        except:
-            return datetime.max.replace(tzinfo=timezone.utc)
-
-    upcoming_soon   = sorted(upcoming, key=safe_dt)[:8]
-    finished_recent = sorted(finished, key=safe_dt, reverse=True)[:10]
-
-    items = []
-
-    for m in live:
-        hs  = m.get('home_score', 0) or 0
-        aws = m.get('away_score', 0) or 0
-        items.append(
-            f'<span class="ticker-live-dot"></span>'
-            f'<span class="ticker-live-label">LIVE</span>'
-            f'<span class="ticker-team">{m["home"]}</span>'
-            f'<span class="ticker-score">{hs} – {aws}</span>'
-            f'<span class="ticker-team">{m["away"]}</span>'
-        )
-
-    for m in finished_recent:
-        hs  = m.get('home_score', 0) or 0
-        aws = m.get('away_score', 0) or 0
-        home_style = 'ticker-winner' if hs > aws else 'ticker-loser' if hs < aws else 'ticker-team'
-        away_style = 'ticker-winner' if aws > hs else 'ticker-loser' if aws < hs else 'ticker-team'
-        items.append(
-            f'<span class="ticker-ft-label">FT</span>'
-            f'<span class="{home_style}">{m["home"]}</span>'
-            f'<span class="ticker-score">{hs} – {aws}</span>'
-            f'<span class="{away_style}">{m["away"]}</span>'
-        )
-
-    for m in upcoming_soon:
-        try:
-            dt_utc   = datetime.fromisoformat(m['date'].replace('Z', '+00:00'))
-            dt_local = dt_utc.astimezone()
-            time_str = dt_local.strftime('%d %b · %H:%M')
-        except:
-            time_str = ''
-        items.append(
-            f'<span class="ticker-upcoming-label">UP NEXT</span>'
-            f'<span class="ticker-team">{m["home"]}</span>'
-            f'<span class="ticker-vs">vs</span>'
-            f'<span class="ticker-team">{m["away"]}</span>'
-            f'<span class="ticker-time">{time_str}</span>'
-        )
-
-    if not items:
-        return
-
-    sep            = '<span class="ticker-sep">·</span>'
-    all_items_html = sep.join(items)
-    ticker_content = all_items_html + sep + all_items_html
-    duration       = max(20, len(items) * 3.5)
-
-    st.markdown(f"""
-    <style>
-        .ticker-wrap {{
-            width: 100%;
-            background: #0b1220;
-            border: 1px solid #161f30;
-            border-radius: 10px;
-            overflow: hidden;
-            margin: 0 0 28px 0;
-            padding: 0;
-            position: relative;
-        }}
-        .ticker-wrap::before,
-        .ticker-wrap::after {{
-            content: '';
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            width: 60px;
-            z-index: 2;
-            pointer-events: none;
-        }}
-        .ticker-wrap::before {{
-            left: 0;
-            background: linear-gradient(to right, #0b1220 0%, transparent 100%);
-        }}
-        .ticker-wrap::after {{
-            right: 0;
-            background: linear-gradient(to left, #0b1220 0%, transparent 100%);
-        }}
-        .ticker-inner {{
-            display: flex;
-            align-items: center;
-            white-space: nowrap;
-            padding: 11px 0;
-            animation: ticker-scroll {duration}s linear infinite;
-            will-change: transform;
-        }}
-        .ticker-inner:hover {{
-            animation-play-state: paused;
-        }}
-        @keyframes ticker-scroll {{
-            0%   {{ transform: translateX(0); }}
-            100% {{ transform: translateX(-50%); }}
-        }}
-        .ticker-sep {{
-            color: #1e2d45;
-            font-size: 1rem;
-            margin: 0 20px;
-            flex-shrink: 0;
-        }}
-        .ticker-team {{
-            font-size: 0.78rem;
-            font-weight: 600;
-            color: #94a3b8;
-            letter-spacing: 0.2px;
-            flex-shrink: 0;
-        }}
-        .ticker-winner {{
-            font-size: 0.78rem;
-            font-weight: 700;
-            color: #e2e8f0;
-            flex-shrink: 0;
-        }}
-        .ticker-loser {{
-            font-size: 0.78rem;
-            font-weight: 500;
-            color: #3d4f6b;
-            flex-shrink: 0;
-        }}
-        .ticker-score {{
-            font-size: 0.82rem;
-            font-weight: 800;
-            color: #ffffff;
-            letter-spacing: 0.5px;
-            margin: 0 8px;
-            flex-shrink: 0;
-        }}
-        .ticker-vs {{
-            font-size: 0.72rem;
-            font-weight: 600;
-            color: #1e2d45;
-            margin: 0 7px;
-            letter-spacing: 1px;
-            flex-shrink: 0;
-        }}
-        .ticker-time {{
-            font-size: 0.7rem;
-            color: #4a9eff;
-            margin-left: 7px;
-            font-weight: 500;
-            flex-shrink: 0;
-        }}
-        .ticker-ft-label {{
-            font-size: 0.58rem;
-            font-weight: 800;
-            letter-spacing: 1.5px;
-            color: #2a3a52;
-            background: #111a28;
-            border: 1px solid #161f30;
-            border-radius: 4px;
-            padding: 2px 6px;
-            margin-right: 10px;
-            flex-shrink: 0;
-        }}
-        .ticker-upcoming-label {{
-            font-size: 0.58rem;
-            font-weight: 800;
-            letter-spacing: 1.5px;
-            color: #4a9eff;
-            background: #0d1a2e;
-            border: 1px solid #1e3a5f;
-            border-radius: 4px;
-            padding: 2px 6px;
-            margin-right: 10px;
-            flex-shrink: 0;
-        }}
-        .ticker-live-label {{
-            font-size: 0.58rem;
-            font-weight: 800;
-            letter-spacing: 1.5px;
-            color: #4ade80;
-            background: #0f2d1a;
-            border: 1px solid #166534;
-            border-radius: 4px;
-            padding: 2px 6px;
-            margin-right: 10px;
-            flex-shrink: 0;
-        }}
-        .ticker-live-dot {{
-            display: inline-block;
-            width: 6px;
-            height: 6px;
-            background: #4ade80;
-            border-radius: 50%;
-            margin-right: 8px;
-            flex-shrink: 0;
-            animation: pulse-dot 1.4s ease-in-out infinite;
-            box-shadow: 0 0 6px #4ade8088;
-        }}
-        @keyframes pulse-dot {{
-            0%, 100% {{ opacity: 1; transform: scale(1); }}
-            50%        {{ opacity: 0.4; transform: scale(0.7); }}
-        }}
-    </style>
-    <div class="ticker-wrap">
-        <div class="ticker-inner">
-            {ticker_content}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-
+""" Test Break """
 # ── HOME PAGE ──────────────────────────────────────────────────────────────
 def show_home():
     import os
@@ -868,7 +808,7 @@ def show_home():
     col_logo, col_title = st.columns([1, 10])
     with col_logo:
         if os.path.exists(logo_path):
-            st.image(logo_path, width=128)
+            st.image(logo_path, width=64)
     with col_title:
         st.markdown('<div style="padding-top:6px"><div class="ballr-title">Ballr</div><div class="ballr-sub">2026 FIFA World Cup · AI Match Predictor</div></div>', unsafe_allow_html=True)
 
@@ -883,8 +823,6 @@ def show_home():
     fixtures = [f for f in fixtures if f['home'] and f['away']]
     today = date.today()
     knockout_stages = {'LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','THIRD_PLACE','FINAL'}
-
-    render_ticker(fixtures)
 
     def render_grid(matches, tab_key):
         if not matches:
@@ -1085,8 +1023,7 @@ def show_finished_match(m, data):
                     st.markdown(stat_box(f"{first[0]['minute']}'", f"First Goal · {first[0]['player']}"), unsafe_allow_html=True)
 
     sec_header("Form & Statistical Comparison")
-    st.plotly_chart(chart_stats_comparison(m['home'], m['away'], hs, aws),
-                    use_container_width=True, config={'displayModeBar': False})
+    chart_stats_comparison(m['home'], m['away'], hs, aws)
     render_form_blocks(m['home'], m['away'], hs, aws)
 
     sec_header("Watson NLU · Pre-Match Form Sentiment")
@@ -1197,8 +1134,7 @@ def show_upcoming_match(m, data):
     st.markdown('</div>', unsafe_allow_html=True)
 
     sec_header("Form & Statistical Comparison")
-    st.plotly_chart(chart_stats_comparison(m['home'], m['away'], hs, aws),
-                    use_container_width=True, config={'displayModeBar': False})
+    chart_stats_comparison(m['home'], m['away'], hs, aws)
     render_form_blocks(m['home'], m['away'], hs, aws)
 
     sec_header("Watson NLU · Form Sentiment Analysis")
