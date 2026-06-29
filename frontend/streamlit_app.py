@@ -5,7 +5,7 @@ from plotly.subplots import make_subplots
 from datetime import datetime, timezone, date
 import os
 BACKEND = os.getenv("BACKEND_URL", "http://127.0.0.1:5000")
-
+print("Test")
 st.set_page_config(
     page_title="Ballr",
     page_icon="⚽",
