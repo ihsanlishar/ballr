@@ -10,6 +10,7 @@ BASE_URL = 'https://api.football-data.org/v4'
 HEADERS = {'X-Auth-Token': API_KEY}
 
 cache = TTLCache(maxsize=128, ttl=300)
+events_cache = TTLCache(maxsize=64, ttl=86400)  # 24 hours
 
 COMP_WEIGHTS = {
     'FIFA World Cup': 1.0,
@@ -153,7 +154,7 @@ def _default_stats():
         'sample_size': 0,
     }
 
-@cached(cache)
+@cached(events_cache)
 def get_match_events(home_team, away_team):
     """Fetch goal scorers and cards from Google via SerpAPI."""
     try:
