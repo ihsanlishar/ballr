@@ -643,6 +643,224 @@ def render_form_blocks(home_team, away_team, hs, aws):
             </div>
             """, unsafe_allow_html=True)
 
+# ── LIVE TICKER ────────────────────────────────────────────────────────────
+def render_ticker(fixtures):
+    from datetime import datetime, timezone
+
+    finished       = [f for f in fixtures if f['status'] == 'FINISHED']
+    live           = [f for f in fixtures if f['status'] in ('IN_PLAY', 'PAUSED')]
+    upcoming       = [f for f in fixtures if f['status'] not in ('FINISHED', 'IN_PLAY', 'PAUSED')]
+
+    def safe_dt(f):
+        try:
+            return datetime.fromisoformat(f['date'].replace('Z', '+00:00'))
+        except:
+            return datetime.max.replace(tzinfo=timezone.utc)
+
+    upcoming_soon   = sorted(upcoming, key=safe_dt)[:8]
+    finished_recent = sorted(finished, key=safe_dt, reverse=True)[:10]
+
+    items = []
+
+    for m in live:
+        hs  = m.get('home_score', 0) or 0
+        aws = m.get('away_score', 0) or 0
+        items.append(
+            f'<span class="ticker-live-dot"></span>'
+            f'<span class="ticker-live-label">LIVE</span>'
+            f'<span class="ticker-team">{m["home"]}</span>'
+            f'<span class="ticker-score">{hs} – {aws}</span>'
+            f'<span class="ticker-team">{m["away"]}</span>'
+        )
+
+    for m in finished_recent:
+        hs  = m.get('home_score', 0) or 0
+        aws = m.get('away_score', 0) or 0
+        home_style = 'ticker-winner' if hs > aws else 'ticker-loser' if hs < aws else 'ticker-team'
+        away_style = 'ticker-winner' if aws > hs else 'ticker-loser' if aws < hs else 'ticker-team'
+        items.append(
+            f'<span class="ticker-ft-label">FT</span>'
+            f'<span class="{home_style}">{m["home"]}</span>'
+            f'<span class="ticker-score">{hs} – {aws}</span>'
+            f'<span class="{away_style}">{m["away"]}</span>'
+        )
+
+    for m in upcoming_soon:
+        try:
+            dt_utc   = datetime.fromisoformat(m['date'].replace('Z', '+00:00'))
+            dt_local = dt_utc.astimezone()
+            time_str = dt_local.strftime('%d %b · %H:%M')
+        except:
+            time_str = ''
+        items.append(
+            f'<span class="ticker-upcoming-label">UP NEXT</span>'
+            f'<span class="ticker-team">{m["home"]}</span>'
+            f'<span class="ticker-vs">vs</span>'
+            f'<span class="ticker-team">{m["away"]}</span>'
+            f'<span class="ticker-time">{time_str}</span>'
+        )
+
+    if not items:
+        return
+
+    sep            = '<span class="ticker-sep">·</span>'
+    all_items_html = sep.join(items)
+    ticker_content = all_items_html + sep + all_items_html
+    duration       = max(20, len(items) * 3.5)
+
+    st.markdown(f"""
+    <style>
+        .ticker-wrap {{
+            width: 100%;
+            background: #0b1220;
+            border: 1px solid #161f30;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 0 0 28px 0;
+            padding: 0;
+            position: relative;
+        }}
+        .ticker-wrap::before,
+        .ticker-wrap::after {{
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 60px;
+            z-index: 2;
+            pointer-events: none;
+        }}
+        .ticker-wrap::before {{
+            left: 0;
+            background: linear-gradient(to right, #0b1220 0%, transparent 100%);
+        }}
+        .ticker-wrap::after {{
+            right: 0;
+            background: linear-gradient(to left, #0b1220 0%, transparent 100%);
+        }}
+        .ticker-inner {{
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
+            padding: 11px 0;
+            animation: ticker-scroll {duration}s linear infinite;
+            will-change: transform;
+        }}
+        .ticker-inner:hover {{
+            animation-play-state: paused;
+        }}
+        @keyframes ticker-scroll {{
+            0%   {{ transform: translateX(0); }}
+            100% {{ transform: translateX(-50%); }}
+        }}
+        .ticker-sep {{
+            color: #1e2d45;
+            font-size: 1rem;
+            margin: 0 20px;
+            flex-shrink: 0;
+        }}
+        .ticker-team {{
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #94a3b8;
+            letter-spacing: 0.2px;
+            flex-shrink: 0;
+        }}
+        .ticker-winner {{
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: #e2e8f0;
+            flex-shrink: 0;
+        }}
+        .ticker-loser {{
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: #3d4f6b;
+            flex-shrink: 0;
+        }}
+        .ticker-score {{
+            font-size: 0.82rem;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: 0.5px;
+            margin: 0 8px;
+            flex-shrink: 0;
+        }}
+        .ticker-vs {{
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: #1e2d45;
+            margin: 0 7px;
+            letter-spacing: 1px;
+            flex-shrink: 0;
+        }}
+        .ticker-time {{
+            font-size: 0.7rem;
+            color: #4a9eff;
+            margin-left: 7px;
+            font-weight: 500;
+            flex-shrink: 0;
+        }}
+        .ticker-ft-label {{
+            font-size: 0.58rem;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            color: #2a3a52;
+            background: #111a28;
+            border: 1px solid #161f30;
+            border-radius: 4px;
+            padding: 2px 6px;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }}
+        .ticker-upcoming-label {{
+            font-size: 0.58rem;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            color: #4a9eff;
+            background: #0d1a2e;
+            border: 1px solid #1e3a5f;
+            border-radius: 4px;
+            padding: 2px 6px;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }}
+        .ticker-live-label {{
+            font-size: 0.58rem;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            color: #4ade80;
+            background: #0f2d1a;
+            border: 1px solid #166534;
+            border-radius: 4px;
+            padding: 2px 6px;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }}
+        .ticker-live-dot {{
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: #4ade80;
+            border-radius: 50%;
+            margin-right: 8px;
+            flex-shrink: 0;
+            animation: pulse-dot 1.4s ease-in-out infinite;
+            box-shadow: 0 0 6px #4ade8088;
+        }}
+        @keyframes pulse-dot {{
+            0%, 100% {{ opacity: 1; transform: scale(1); }}
+            50%        {{ opacity: 0.4; transform: scale(0.7); }}
+        }}
+    </style>
+    <div class="ticker-wrap">
+        <div class="ticker-inner">
+            {ticker_content}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 # ── HOME PAGE ──────────────────────────────────────────────────────────────
 def show_home():
     import os
@@ -665,6 +883,8 @@ def show_home():
     fixtures = [f for f in fixtures if f['home'] and f['away']]
     today = date.today()
     knockout_stages = {'LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','THIRD_PLACE','FINAL'}
+
+    render_ticker(fixtures)
 
     def render_grid(matches, tab_key):
         if not matches:
