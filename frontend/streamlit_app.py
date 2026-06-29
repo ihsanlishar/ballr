@@ -803,6 +803,70 @@ def render_form_blocks(home_team, away_team, hs, aws):
 
 # ── HOME PAGE ──────────────────────────────────────────────────────────────
 def show_home():
+    # Particle background
+    st.markdown("""
+    <canvas id="ballr-particles" style="
+        position:fixed;top:0;left:0;width:100%;height:100%;
+        pointer-events:none;z-index:0;opacity:0.45;
+    "></canvas>
+    <script>
+    (function() {
+        const canvas = document.getElementById('ballr-particles');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        function resize() {
+            canvas.width  = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        const COUNT = 72;
+        const particles = Array.from({length: COUNT}, () => ({
+            x:    Math.random() * canvas.width,
+            y:    Math.random() * canvas.height,
+            r:    Math.random() * 1.4 + 0.3,
+            dx:   (Math.random() - 0.5) * 0.28,
+            dy:   (Math.random() - 0.5) * 0.28,
+            alpha: Math.random() * 0.5 + 0.08,
+        }));
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(74, 158, 255, ${p.alpha})`;
+                ctx.fill();
+                p.x += p.dx;
+                p.y += p.dy;
+                if (p.x < -4)               p.x = canvas.width  + 4;
+                if (p.x > canvas.width + 4)  p.x = -4;
+                if (p.y < -4)               p.y = canvas.height + 4;
+                if (p.y > canvas.height + 4) p.y = -4;
+            });
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const a = particles[i], b = particles[j];
+                    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+                    if (dist < 110) {
+                        ctx.beginPath();
+                        ctx.moveTo(a.x, a.y);
+                        ctx.lineTo(b.x, b.y);
+                        ctx.strokeStyle = `rgba(30, 45, 69, ${0.6 * (1 - dist / 110)})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(draw);
+        }
+        draw();
+    })();
+    </script>
+    """, unsafe_allow_html=True)
+
     import os
     logo_path = os.path.join(os.path.dirname(__file__), 'logo.png')
     col_logo, col_title = st.columns([1, 10])
