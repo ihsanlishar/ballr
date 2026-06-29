@@ -868,7 +868,7 @@ def show_home():
     col_logo, col_title = st.columns([1, 10])
     with col_logo:
         if os.path.exists(logo_path):
-            st.image(logo_path, width=64)
+            st.image(logo_path, width=128)
     with col_title:
         st.markdown('<div style="padding-top:6px"><div class="ballr-title">Ballr</div><div class="ballr-sub">2026 FIFA World Cup · AI Match Predictor</div></div>', unsafe_allow_html=True)
 
