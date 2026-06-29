@@ -801,6 +801,510 @@ def render_form_blocks(home_team, away_team, hs, aws):
             </div>
             """, unsafe_allow_html=True)
 
+# ── MODEL ACCURACY TAB ────────────────────────────────────────────────────
+def render_model_tab(fixtures):
+    finished = [f for f in fixtures if f['status'] == 'FINISHED']
+
+    if not finished:
+        st.markdown("""
+        <div class="empty-state">
+            <div class="empty-icon">🤖</div>
+            <div style="font-size:1rem;color:#3d4f6b;margin-bottom:6px">No results yet</div>
+            <div style="font-size:0.78rem;color:#1e2d45">Accuracy stats will appear once matches have been played.</div>
+        </div>
+        """, unsafe_allow_html=True)
+        return
+
+    # ── Fetch predictions for all finished matches ─────────────────────────
+    predictions = []
+    with st.spinner(""):
+        for m in finished:
+            try:
+                r = requests.get(f"{BACKEND}/match/{m['home_id']}/{m['away_id']}", timeout=15)
+                data = r.json()
+                sim  = data.get('simulation', {})
+                predictions.append({
+                    'match':    m,
+                    'sim':      sim,
+                    'p1':       sim.get('team1_win_pct', 0),
+                    'pd':       sim.get('draw_pct', 0),
+                    'p2':       sim.get('team2_win_pct', 0),
+                    'top_score': sim.get('top_scores', [['—', 0]])[0],
+                })
+            except:
+                pass
+
+    if not predictions:
+        st.error("Could not load prediction data.")
+        return
+
+    # ── Compute accuracy stats ─────────────────────────────────────────────
+    total        = len(predictions)
+    correct      = 0
+    draws_correct = 0
+    draws_total  = 0
+    score_correct = 0
+    upsets       = 0
+
+    # Stage breakdown
+    stage_stats  = {}
+    outcome_stats = {'Win': [0, 0], 'Draw': [0, 0], 'Loss': [0, 0]}  # [correct, total]
+
+    for p in predictions:
+        m  = p['match']
+        hs = m['home_score']
+        aws= m['away_score']
+        p1, pd_, p2 = p['p1'], p['pd'], p['p2']
+
+        # Actual outcome
+        if hs > aws:   actual = 'home'
+        elif aws > hs: actual = 'away'
+        else:          actual = 'draw'
+
+        # Predicted outcome (highest probability wins)
+        if p1 > p2 and p1 > pd_:   pred = 'home'
+        elif p2 > p1 and p2 > pd_: pred = 'away'
+        else:                       pred = 'draw'
+
+        is_correct = (pred == actual)
+        if is_correct:
+            correct += 1
+
+        # Upset detection — model was very confident but wrong
+        max_p = max(p1, p2, pd_)
+        if not is_correct and max_p >= 60:
+            upsets += 1
+
+        # Outcome type breakdown
+        if actual == 'draw':
+            draws_total += 1
+            outcome_stats['Draw'][1] += 1
+            if is_correct:
+                draws_correct += 1
+                outcome_stats['Draw'][0] += 1
+        elif actual == 'home':
+            outcome_stats['Win'][1] += 1
+            if is_correct: outcome_stats['Win'][0] += 1
+        else:
+            outcome_stats['Loss'][1] += 1
+            if is_correct: outcome_stats['Loss'][0] += 1
+
+        # Exact score
+        top_pred = p['top_score'][0]
+        if top_pred == f"{hs}-{aws}":
+            score_correct += 1
+
+        # Stage breakdown
+        stage = fmt_stage(m['stage'])
+        if stage not in stage_stats:
+            stage_stats[stage] = [0, 0]
+        stage_stats[stage][1] += 1
+        if is_correct:
+            stage_stats[stage][0] += 1
+
+    accuracy_pct = round(correct / total * 100) if total else 0
+    score_pct    = round(score_correct / total * 100) if total else 0
+
+    # ── Hero accuracy stat ─────────────────────────────────────────────────
+    acc_color = '#4ade80' if accuracy_pct >= 60 else '#f59e0b' if accuracy_pct >= 45 else '#f87171'
+    acc_label = 'Strong' if accuracy_pct >= 60 else 'Developing' if accuracy_pct >= 45 else 'Early days'
+
+    st.markdown(f"""
+    <style>
+        .model-hero {{
+            background: linear-gradient(160deg, #0d1a2e 0%, #080d18 100%);
+            border: 1px solid #131e30;
+            border-top: 3px solid #4a9eff;
+            border-radius: 20px;
+            padding: 40px 40px 36px 40px;
+            text-align: center;
+            margin-bottom: 32px;
+        }}
+        .model-hero-pct {{
+            font-size: 5.5rem;
+            font-weight: 900;
+            letter-spacing: -4px;
+            line-height: 1;
+            color: {acc_color};
+            margin-bottom: 8px;
+        }}
+        .model-hero-label {{
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #3d4f6b;
+            margin-bottom: 6px;
+        }}
+        .model-hero-sub {{
+            font-size: 0.88rem;
+            color: #3d4f6b;
+        }}
+        .model-hero-badge {{
+            display: inline-block;
+            background: #0d1a2e;
+            border: 1px solid #1e3a5f;
+            border-radius: 20px;
+            padding: 4px 18px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: {acc_color};
+            margin-top: 14px;
+        }}
+        .model-stat-grid {{
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 28px;
+        }}
+        .model-stat-card {{
+            background: #0d1526;
+            border: 1px solid #131e30;
+            border-radius: 14px;
+            padding: 22px 16px 18px 16px;
+            text-align: center;
+        }}
+        .model-stat-val {{
+            font-size: 2rem;
+            font-weight: 900;
+            line-height: 1;
+            margin-bottom: 6px;
+        }}
+        .model-stat-lbl {{
+            font-size: 0.62rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #3d4f6b;
+            margin-bottom: 4px;
+        }}
+        .model-stat-sub {{
+            font-size: 0.72rem;
+            color: #1e2d45;
+        }}
+        .outcome-row {{
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 0;
+            border-bottom: 1px solid #0f1626;
+        }}
+        .outcome-row:last-child {{ border-bottom: none; }}
+        .outcome-label {{
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: #64748b;
+            width: 60px;
+            flex-shrink: 0;
+        }}
+        .outcome-bar-bg {{
+            flex: 1;
+            background: #080d18;
+            border-radius: 6px;
+            height: 8px;
+            overflow: hidden;
+        }}
+        .outcome-bar-fill {{
+            height: 8px;
+            border-radius: 6px;
+        }}
+        .outcome-pct {{
+            font-size: 0.88rem;
+            font-weight: 700;
+            width: 42px;
+            text-align: right;
+            flex-shrink: 0;
+        }}
+        .outcome-count {{
+            font-size: 0.72rem;
+            color: #3d4f6b;
+            width: 52px;
+            text-align: right;
+            flex-shrink: 0;
+        }}
+        .stage-row {{
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 0;
+            border-bottom: 1px solid #0f1626;
+        }}
+        .stage-row:last-child {{ border-bottom: none; }}
+        .stage-label {{
+            font-size: 0.75rem;
+            color: #64748b;
+            width: 120px;
+            flex-shrink: 0;
+        }}
+        .log-row {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 11px 0;
+            border-bottom: 1px solid #0a1020;
+            font-size: 0.82rem;
+        }}
+        .log-row:last-child {{ border-bottom: none; }}
+        .log-teams {{
+            flex: 1;
+            color: #e2e8f0;
+            font-weight: 600;
+        }}
+        .log-score {{
+            font-size: 0.88rem;
+            font-weight: 800;
+            color: #ffffff;
+            min-width: 48px;
+            text-align: center;
+        }}
+        .log-pred {{
+            font-size: 0.72rem;
+            color: #3d4f6b;
+            min-width: 80px;
+            text-align: right;
+        }}
+        .log-tick {{
+            min-width: 22px;
+            text-align: center;
+            font-size: 0.82rem;
+        }}
+        .log-upset {{
+            font-size: 0.6rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            background: #2d1500;
+            color: #f59e0b;
+            border-radius: 4px;
+            padding: 2px 7px;
+        }}
+        .model-explainer {{
+            background: #0d1526;
+            border-left: 2px solid #1e3a5f;
+            border-radius: 0 10px 10px 0;
+            padding: 16px 20px;
+            font-size: 0.82rem;
+            color: #4b5a75;
+            line-height: 1.75;
+            margin-bottom: 8px;
+        }}
+        .model-explainer strong {{ color: #e2e8f0; }}
+    </style>
+
+    <div class="model-hero">
+        <div class="model-hero-label">Overall Prediction Accuracy</div>
+        <div class="model-hero-pct">{accuracy_pct}%</div>
+        <div class="model-hero-sub">{correct} correct from {total} finished matches</div>
+        <div class="model-hero-badge">{acc_label}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── 4 headline stat cards ──────────────────────────────────────────────
+    draw_acc = round(draws_correct / draws_total * 100) if draws_total else 0
+    st.markdown(f"""
+    <div class="model-stat-grid">
+        <div class="model-stat-card">
+            <div class="model-stat-lbl">Correct Outcomes</div>
+            <div class="model-stat-val" style="color:#4a9eff">{correct}<span style="font-size:1.1rem;color:#1e2d45">/{total}</span></div>
+            <div class="model-stat-sub">winner / draw predicted</div>
+        </div>
+        <div class="model-stat-card">
+            <div class="model-stat-lbl">Exact Score Hits</div>
+            <div class="model-stat-val" style="color:#4ade80">{score_correct}<span style="font-size:1.1rem;color:#1e2d45">/{total}</span></div>
+            <div class="model-stat-sub">{score_pct}% exact scoreline</div>
+        </div>
+        <div class="model-stat-card">
+            <div class="model-stat-lbl">Draw Accuracy</div>
+            <div class="model-stat-val" style="color:#94a3b8">{draw_acc}<span style="font-size:1rem;color:#1e2d45">%</span></div>
+            <div class="model-stat-sub">{draws_correct} of {draws_total} draws called</div>
+        </div>
+        <div class="model-stat-card">
+            <div class="model-stat-lbl">Upsets Missed</div>
+            <div class="model-stat-val" style="color:#f59e0b">{upsets}<span style="font-size:1rem;color:#1e2d45">/{total}</span></div>
+            <div class="model-stat-sub">confident & wrong</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Outcome type breakdown + Stage breakdown side by side ──────────────
+    col_left, col_right = st.columns([1, 1])
+
+    with col_left:
+        sec_header("Accuracy by Outcome Type")
+        outcome_colors = {'Win': '#4a9eff', 'Draw': '#94a3b8', 'Loss': '#f87171'}
+        outcome_html = '<div style="background:#0d1526;border:1px solid #131e30;border-radius:14px;padding:20px 24px;">'
+        for outcome, (c_count, t_count) in outcome_stats.items():
+            pct  = round(c_count / t_count * 100) if t_count else 0
+            col  = outcome_colors[outcome]
+            outcome_html += f"""
+            <div class="outcome-row">
+                <div class="outcome-label">{outcome}</div>
+                <div class="outcome-bar-bg">
+                    <div class="outcome-bar-fill" style="width:{pct}%;background:{col}"></div>
+                </div>
+                <div class="outcome-pct" style="color:{col}">{pct}%</div>
+                <div class="outcome-count">{c_count}/{t_count}</div>
+            </div>"""
+        outcome_html += '</div>'
+        st.markdown(outcome_html, unsafe_allow_html=True)
+
+    with col_right:
+        sec_header("Accuracy by Stage")
+        stage_order = ['Group Stage','Round of 32','Round of 16','Quarter Final','Semi Final','Third Place','Final']
+        stage_html  = '<div style="background:#0d1526;border:1px solid #131e30;border-radius:14px;padding:20px 24px;">'
+        has_stage   = False
+        for s in stage_order:
+            if s not in stage_stats: continue
+            has_stage = True
+            c_count, t_count = stage_stats[s]
+            pct  = round(c_count / t_count * 100) if t_count else 0
+            col  = '#4ade80' if pct >= 60 else '#f59e0b' if pct >= 40 else '#f87171'
+            stage_html += f"""
+            <div class="stage-row">
+                <div class="stage-label">{s}</div>
+                <div class="outcome-bar-bg">
+                    <div class="outcome-bar-fill" style="width:{pct}%;background:{col}"></div>
+                </div>
+                <div class="outcome-pct" style="color:{col}">{pct}%</div>
+                <div class="outcome-count">{c_count}/{t_count}</div>
+            </div>"""
+        if not has_stage:
+            stage_html += '<div style="color:#3d4f6b;font-size:0.82rem;padding:8px 0">No stage data yet.</div>'
+        stage_html += '</div>'
+        st.markdown(stage_html, unsafe_allow_html=True)
+
+    # ── Confidence vs accuracy chart ───────────────────────────────────────
+    sec_header("Confidence vs Outcome")
+
+    buckets = {'50–59%': [0, 0], '60–69%': [0, 0], '70–79%': [0, 0], '80–89%': [0, 0], '90–100%': [0, 0]}
+    def get_bucket(p):
+        if p >= 90: return '90–100%'
+        if p >= 80: return '80–89%'
+        if p >= 70: return '70–79%'
+        if p >= 60: return '60–69%'
+        return '50–59%'
+
+    for p in predictions:
+        m   = p['match']
+        hs  = m['home_score']
+        aws = m['away_score']
+        p1, pd_, p2 = p['p1'], p['pd'], p['p2']
+        max_p = max(p1, p2, pd_)
+        bucket = get_bucket(max_p)
+
+        if hs > aws:   actual = 'home'
+        elif aws > hs: actual = 'away'
+        else:          actual = 'draw'
+        if p1 > p2 and p1 > pd_:   pred = 'home'
+        elif p2 > p1 and p2 > pd_: pred = 'away'
+        else:                       pred = 'draw'
+
+        buckets[bucket][1] += 1
+        if pred == actual:
+            buckets[bucket][0] += 1
+
+    b_labels = list(buckets.keys())
+    b_pcts   = [round(v[0] / v[1] * 100) if v[1] else 0 for v in buckets.values()]
+    b_counts = [v[1] for v in buckets.values()]
+
+    fig_conf = go.Figure()
+    bar_colors = ['#4ade80' if p >= 60 else '#f59e0b' if p >= 40 else '#f87171' for p in b_pcts]
+
+    fig_conf.add_trace(go.Bar(
+        x=b_labels,
+        y=b_pcts,
+        marker_color=bar_colors,
+        marker_line=dict(color='#080d18', width=2),
+        text=[f'{p}%<br><span style="font-size:9px;color:#3d4f6b">{c} matches</span>' for p, c in zip(b_pcts, b_counts)],
+        textposition='outside',
+        textfont=dict(size=11, color='#94a3b8', family='Inter, sans-serif'),
+        hovertemplate='Confidence: %{x}<br>Accuracy: %{y}%<extra></extra>',
+        width=0.55,
+    ))
+
+    fig_conf.add_hline(y=50, line_dash='dot', line_color='#1e2d45', line_width=1,
+        annotation_text='50% baseline', annotation_font_size=9,
+        annotation_font_color='#3d4f6b', annotation_position='top right')
+
+    fig_conf.update_layout(
+        height=280,
+        paper_bgcolor='#0d1526',
+        plot_bgcolor='#0d1526',
+        xaxis=dict(tickfont=dict(size=10, color='#64748b', family='Inter, sans-serif'), showgrid=False),
+        yaxis=dict(tickfont=dict(size=9, color='#3d4f6b'), showgrid=True, gridcolor='#0f1626',
+                   zeroline=False, range=[0, 115], ticksuffix='%'),
+        font=dict(family='Inter, sans-serif', color='#94a3b8', size=11),
+        margin=dict(l=32, r=16, t=24, b=16),
+        showlegend=False,
+    )
+    st.plotly_chart(fig_conf, use_container_width=True, config={'displayModeBar': False})
+
+    # ── Per-match prediction log ───────────────────────────────────────────
+    sec_header("Prediction Log · Every Finished Match")
+
+    log_html = '<div style="background:#0d1526;border:1px solid #131e30;border-radius:14px;padding:8px 24px;">'
+    for p in sorted(predictions, key=lambda x: x['match']['date'], reverse=True):
+        m   = p['match']
+        hs  = m['home_score']
+        aws = m['away_score']
+        p1, pd_, p2 = p['p1'], p['pd'], p['p2']
+        max_p = max(p1, p2, pd_)
+
+        if hs > aws:   actual = 'home'
+        elif aws > hs: actual = 'away'
+        else:          actual = 'draw'
+
+        if p1 > p2 and p1 > pd_:   pred = 'home'
+        elif p2 > p1 and p2 > pd_: pred = 'away'
+        else:                       pred = 'draw'
+
+        is_correct = (pred == actual)
+        tick       = '✅' if is_correct else '❌'
+
+        # Predicted winner label
+        if pred == 'home':   pred_label = m['home']
+        elif pred == 'away': pred_label = m['away']
+        else:                pred_label = 'Draw'
+        pred_conf = round(max_p)
+
+        is_upset = (not is_correct) and max_p >= 60
+        upset_badge = '<span class="log-upset">UPSET</span>' if is_upset else ''
+
+        top_score  = p['top_score'][0]
+        score_hit  = top_score == f"{hs}-{aws}"
+        score_badge = '<span style="font-size:0.6rem;font-weight:700;letter-spacing:1px;background:#0f2d1a;color:#4ade80;border-radius:4px;padding:2px 7px;">SCORE ✓</span>' if score_hit else ''
+
+        log_html += f"""
+        <div class="log-row">
+            <div class="log-tick">{tick}</div>
+            <div class="log-teams">{m['home']} <span style="color:#1e2d45">vs</span> {m['away']}</div>
+            <div class="log-score">{hs} – {aws}</div>
+            <div class="log-pred" style="color:#3d4f6b">Pred: <span style="color:#64748b;font-weight:700">{pred_label}</span> <span style="color:#1e2d45">({pred_conf}%)</span></div>
+            <div style="min-width:16px">{upset_badge}{score_badge}</div>
+        </div>"""
+    log_html += '</div>'
+    st.markdown(log_html, unsafe_allow_html=True)
+
+    # ── How the model works explainer ─────────────────────────────────────
+    sec_header("How the Model Works")
+    st.markdown("""
+    <div class="model-explainer">
+        <strong>Monte Carlo Simulation (50,000 runs)</strong> — For each match, the model runs 50,000 simulated games.
+        Each team's attacking strength is derived from their recent goals scored, goals conceded, clean sheet rate,
+        and goal difference per game. The distribution of simulated results produces win/draw/loss probabilities
+        and a full scoreline probability matrix.<br><br>
+        <strong>IBM Watson NLU · Sentiment Adjustment</strong> — A plain-English summary of each team's recent form
+        is passed to Watson's Natural Language Understanding API, which scores the emotional tone on a scale of –1 to +1.
+        A positive sentiment score boosts the team's projected attacking output in the simulation; a negative score
+        reduces it. This means momentum and confidence are baked into every prediction.<br><br>
+        <strong>Draws are hard</strong> — Football draws are notoriously difficult to predict. Even elite models
+        struggle here because a draw requires both teams to be evenly matched <em>and</em> for neither to convert
+        their chances — a low-probability combination. A lower draw accuracy doesn't mean the model is broken;
+        it means football is unpredictable.
+    </div>
+    """, unsafe_allow_html=True)
+
+
 # ── HOME PAGE ──────────────────────────────────────────────────────────────
 def show_home():
     # CSS background animation
@@ -968,7 +1472,7 @@ def show_home():
                     st.session_state.page = 'match'
                     st.rerun()
 
-    tab_all, tab_today, tab_group, tab_knockout = st.tabs(["  All Matches","  Today","  Group Stage","  Knockout"])
+    tab_all, tab_today, tab_group, tab_knockout, tab_model = st.tabs(["  All Matches","  Today","  Group Stage","  Knockout","  Our Model"])
 
     with tab_today:
         today_matches = [f for f in fixtures if get_match_local_date(f['date']) == today]
@@ -1008,6 +1512,9 @@ def show_home():
                 render_grid(ms, f"ko_{s}")
         else:
             render_grid([], "knockout")
+
+    with tab_model:
+        render_model_tab(fixtures)
 
 # ── FINISHED MATCH ─────────────────────────────────────────────────────────
 def show_finished_match(m, data):
