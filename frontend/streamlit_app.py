@@ -801,111 +801,204 @@ def render_form_blocks(home_team, away_team, hs, aws):
             </div>
             """, unsafe_allow_html=True)
 
-# ── HOME PAGE ──────────────────────────────────────────────────────────────
-def show_home():
-    # CSS background animation
-    st.markdown("""
+# ── PREDICTION ACCURACY TRACKER ───────────────────────────────────────────
+def render_accuracy_tracker(fixtures):
+    """
+    Scans finished fixtures, calls /match for each to get simulation data,
+    then compares predicted winner vs actual result.
+    Uses a lightweight cache via session_state so it only computes once per load.
+    """
+    finished = [f for f in fixtures if f['status'] == 'FINISHED']
+    if not finished:
+        return
+
+    cache_key = 'accuracy_data'
+    if cache_key not in st.session_state:
+        correct = 0
+        exact   = 0
+        total   = 0
+        for m in finished:
+            try:
+                r = requests.get(
+                    f"{BACKEND}/match/{m['home_id']}/{m['away_id']}",
+                    timeout=8
+                )
+                data = r.json()
+                sim  = data.get('simulation', {})
+                if not sim:
+                    continue
+
+                p1   = sim.get('team1_win_pct', 0)
+                pd_  = sim.get('draw_pct', 0)
+                p2   = sim.get('team2_win_pct', 0)
+
+                predicted = (
+                    m['home'] if p1 > p2 and p1 > pd_
+                    else m['away'] if p2 > p1 and p2 > pd_
+                    else 'draw'
+                )
+                hs  = m['home_score']
+                aws = m['away_score']
+                actual = (
+                    m['home'] if hs > aws
+                    else m['away'] if aws > hs
+                    else 'draw'
+                )
+                total += 1
+                if predicted == actual:
+                    correct += 1
+
+                top_score = sim.get('top_scores', [])
+                if top_score:
+                    pred_score = top_score[0][0]
+                    actual_score = f"{hs}-{aws}"
+                    if pred_score == actual_score:
+                        exact += 1
+            except:
+                continue
+
+        st.session_state[cache_key] = {
+            'total':   total,
+            'correct': correct,
+            'exact':   exact,
+        }
+
+    d = st.session_state[cache_key]
+    total   = d['total']
+    correct = d['correct']
+    exact   = d['exact']
+
+    if total == 0:
+        return
+
+    pct = round(correct / total * 100, 1)
+    bar_pct = int(pct)
+    bar_color = '#4ade80' if pct >= 60 else '#facc15' if pct >= 45 else '#f87171'
+    grade = 'Strong' if pct >= 60 else 'Decent' if pct >= 45 else 'Developing'
+
+    st.markdown(f"""
     <style>
-        /* Orb container fixed behind everything */
-        .ballr-bg {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            pointer-events: none;
-            z-index: 0;
+        .acc-wrap {{
+            background: #0d1526;
+            border: 1px solid #131e30;
+            border-radius: 16px;
+            padding: 28px 32px;
+            margin: 40px 0 8px 0;
+        }}
+        .acc-header {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }}
+        .acc-title {{
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #3d4f6b;
+        }}
+        .acc-grade {{
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: {bar_color};
+            background: {bar_color}18;
+            border: 1px solid {bar_color}44;
+            border-radius: 20px;
+            padding: 3px 12px;
+        }}
+        .acc-stats {{
+            display: flex;
+            gap: 0;
+            margin-bottom: 20px;
+        }}
+        .acc-stat {{
+            flex: 1;
+            text-align: center;
+            padding: 0 16px;
+            border-right: 1px solid #131e30;
+        }}
+        .acc-stat:first-child {{ padding-left: 0; }}
+        .acc-stat:last-child  {{ border-right: none; padding-right: 0; }}
+        .acc-stat-val {{
+            font-size: 2.2rem;
+            font-weight: 900;
+            line-height: 1;
+            margin-bottom: 4px;
+        }}
+        .acc-stat-lbl {{
+            font-size: 0.62rem;
+            color: #3d4f6b;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }}
+        .acc-bar-bg {{
+            background: #080d18;
+            border-radius: 8px;
+            height: 6px;
+            width: 100%;
             overflow: hidden;
-        }
-        .ballr-orb {
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(80px);
-            opacity: 0.07;
-            animation: orb-drift linear infinite;
-        }
-        .ballr-orb-1 {
-            width: 520px; height: 520px;
-            background: #1a4a8a;
-            top: -120px; left: -80px;
-            animation-duration: 28s;
-            animation-delay: 0s;
-        }
-        .ballr-orb-2 {
-            width: 380px; height: 380px;
-            background: #0a2a5e;
-            top: 40%; right: -60px;
-            animation-duration: 22s;
-            animation-delay: -8s;
-        }
-        .ballr-orb-3 {
-            width: 300px; height: 300px;
-            background: #0d3470;
-            bottom: -80px; left: 35%;
-            animation-duration: 34s;
-            animation-delay: -14s;
-        }
-        .ballr-orb-4 {
-            width: 200px; height: 200px;
-            background: #4a9eff;
-            top: 30%; left: 25%;
-            animation-duration: 18s;
-            animation-delay: -5s;
-            opacity: 0.04;
-        }
-        /* Star dots — pure CSS, no JS */
-        .ballr-stars {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background-image:
-                radial-gradient(1px 1px at 12% 18%, rgba(74,158,255,0.35) 0%, transparent 100%),
-                radial-gradient(1px 1px at 28% 72%, rgba(74,158,255,0.25) 0%, transparent 100%),
-                radial-gradient(1.5px 1.5px at 44% 11%, rgba(74,158,255,0.4) 0%, transparent 100%),
-                radial-gradient(1px 1px at 67% 55%, rgba(74,158,255,0.3) 0%, transparent 100%),
-                radial-gradient(1px 1px at 81% 29%, rgba(74,158,255,0.2) 0%, transparent 100%),
-                radial-gradient(1.5px 1.5px at 91% 78%, rgba(74,158,255,0.35) 0%, transparent 100%),
-                radial-gradient(1px 1px at 55% 88%, rgba(74,158,255,0.25) 0%, transparent 100%),
-                radial-gradient(1px 1px at 7%  61%, rgba(74,158,255,0.2) 0%, transparent 100%),
-                radial-gradient(1px 1px at 38% 43%, rgba(74,158,255,0.15) 0%, transparent 100%),
-                radial-gradient(1.5px 1.5px at 74% 8%,  rgba(74,158,255,0.35) 0%, transparent 100%),
-                radial-gradient(1px 1px at 19% 91%, rgba(74,158,255,0.2) 0%, transparent 100%),
-                radial-gradient(1px 1px at 62% 34%, rgba(74,158,255,0.25) 0%, transparent 100%),
-                radial-gradient(1px 1px at 88% 50%, rgba(74,158,255,0.15) 0%, transparent 100%),
-                radial-gradient(1.5px 1.5px at 33% 25%, rgba(74,158,255,0.3) 0%, transparent 100%),
-                radial-gradient(1px 1px at 50% 65%, rgba(74,158,255,0.2) 0%, transparent 100%),
-                radial-gradient(1px 1px at 77% 82%, rgba(74,158,255,0.25) 0%, transparent 100%),
-                radial-gradient(1px 1px at 4%  38%, rgba(74,158,255,0.2) 0%, transparent 100%),
-                radial-gradient(1.5px 1.5px at 96% 14%, rgba(74,158,255,0.3) 0%, transparent 100%),
-                radial-gradient(1px 1px at 15% 50%, rgba(74,158,255,0.15) 0%, transparent 100%),
-                radial-gradient(1px 1px at 85% 95%, rgba(74,158,255,0.2) 0%, transparent 100%);
-            animation: stars-twinkle 6s ease-in-out infinite alternate;
-        }
-        @keyframes orb-drift {
-            0%   { transform: translate(0px, 0px) scale(1); }
-            25%  { transform: translate(30px, -20px) scale(1.04); }
-            50%  { transform: translate(15px, 35px) scale(0.97); }
-            75%  { transform: translate(-25px, 10px) scale(1.02); }
-            100% { transform: translate(0px, 0px) scale(1); }
-        }
-        @keyframes stars-twinkle {
-            0%   { opacity: 0.6; }
-            100% { opacity: 1.0; }
-        }
+        }}
+        .acc-bar-fill {{
+            height: 100%;
+            border-radius: 8px;
+            background: {bar_color};
+            width: {bar_pct}%;
+            transition: width 0.6s ease;
+        }}
+        .acc-bar-labels {{
+            display: flex;
+            justify-content: space-between;
+            margin-top: 6px;
+            font-size: 0.62rem;
+            color: #2a3a52;
+        }}
     </style>
-    <div class="ballr-bg">
-        <div class="ballr-stars"></div>
-        <div class="ballr-orb ballr-orb-1"></div>
-        <div class="ballr-orb ballr-orb-2"></div>
-        <div class="ballr-orb ballr-orb-3"></div>
-        <div class="ballr-orb ballr-orb-4"></div>
+    <div class="acc-wrap">
+        <div class="acc-header">
+            <span class="acc-title">Model Accuracy · {total} matches analysed</span>
+            <span class="acc-grade">{grade}</span>
+        </div>
+        <div class="acc-stats">
+            <div class="acc-stat">
+                <div class="acc-stat-val" style="color:{bar_color}">{pct}%</div>
+                <div class="acc-stat-lbl">Prediction Accuracy</div>
+            </div>
+            <div class="acc-stat">
+                <div class="acc-stat-val" style="color:#e2e8f0">{correct}<span style="font-size:1.2rem;color:#3d4f6b"> / {total}</span></div>
+                <div class="acc-stat-lbl">Correct Outcomes</div>
+            </div>
+            <div class="acc-stat">
+                <div class="acc-stat-val" style="color:#4a9eff">{exact}</div>
+                <div class="acc-stat-lbl">Exact Scores Hit</div>
+            </div>
+            <div class="acc-stat">
+                <div class="acc-stat-val" style="color:#94a3b8">{total - correct}</div>
+                <div class="acc-stat-lbl">Missed Predictions</div>
+            </div>
+        </div>
+        <div class="acc-bar-bg">
+            <div class="acc-bar-fill"></div>
+        </div>
+        <div class="acc-bar-labels">
+            <span>0%</span>
+            <span style="color:{bar_color};font-weight:600">{pct}% accuracy</span>
+            <span>100%</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
+
+# ── HOME PAGE ──────────────────────────────────────────────────────────────
+def show_home():
     import os
     logo_path = os.path.join(os.path.dirname(__file__), 'logo.png')
     col_logo, col_title = st.columns([1, 10])
     with col_logo:
         if os.path.exists(logo_path):
-            st.image(logo_path, width=64)
+            st.image(logo_path, width=128)
     with col_title:
         st.markdown('<div style="padding-top:6px"><div class="ballr-title">Ballr</div><div class="ballr-sub">2026 FIFA World Cup · AI Match Predictor</div></div>', unsafe_allow_html=True)
 
@@ -968,7 +1061,7 @@ def show_home():
                     st.session_state.page = 'match'
                     st.rerun()
 
-    tab_all, tab_today, tab_group, tab_knockout = st.tabs(["  All Matches","  Today","  Group Stage","  Knockout"])
+    tab_today, tab_all, tab_group, tab_knockout = st.tabs([" Today","  All Matches","  Group Stage","  Knockout"])
 
     with tab_today:
         today_matches = [f for f in fixtures if get_match_local_date(f['date']) == today]
@@ -1008,6 +1101,9 @@ def show_home():
                 render_grid(ms, f"ko_{s}")
         else:
             render_grid([], "knockout")
+
+    # ── Prediction Accuracy Tracker ────────────────────────────────────────
+    render_accuracy_tracker(fixtures)
 
 # ── FINISHED MATCH ─────────────────────────────────────────────────────────
 def show_finished_match(m, data):
