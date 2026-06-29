@@ -482,29 +482,13 @@ def chart_duel_bars(home_team, away_team, home_stats, away_stats):
             width=0.5,
         ))
 
-        # Value annotations — home on left, away on right
-        fig.add_annotation(
-            x=0, y=label,
-            text=f'<b>{hv}{sfx}</b>',
-            xanchor='right', xshift=-8,
-            font=dict(size=10, color=c1, family='Inter, sans-serif'),
-            showarrow=False,
-        )
-        fig.add_annotation(
-            x=100, y=label,
-            text=f'<b>{av}{sfx}</b>',
-            xanchor='left', xshift=8,
-            font=dict(size=10, color=c2, family='Inter, sans-serif'),
-            showarrow=False,
-        )
-
     fig.update_layout(
         height=320,
         paper_bgcolor='#0d1526',
         plot_bgcolor='#0d1526',
         barmode='stack',
         xaxis=dict(
-            visible=False, range=[0, 100],
+            visible=False, range=[-18, 118],
         ),
         yaxis=dict(
             tickfont=dict(size=10, color='#64748b', family='Inter, sans-serif'),
@@ -512,13 +496,30 @@ def chart_duel_bars(home_team, away_team, home_stats, away_stats):
             autorange='reversed',
         ),
         font=dict(family='Inter, sans-serif', color='#94a3b8', size=11),
-        margin=dict(l=130, r=60, t=36, b=16),
+        margin=dict(l=140, r=70, t=36, b=16),
         showlegend=True,
         legend=dict(
             orientation='h', yanchor='bottom', y=1.04, xanchor='center', x=0.5,
             font=dict(size=11, color='#94a3b8'), bgcolor='rgba(0,0,0,0)',
         ),
     )
+
+    for i, (label, hv, av, sfx) in enumerate(metrics):
+        fig.add_annotation(
+            x=-1, y=label,
+            text=f'<b>{hv}{sfx}</b>',
+            xanchor='right',
+            font=dict(size=10, color=c1, family='Inter, sans-serif'),
+            showarrow=False,
+        )
+        fig.add_annotation(
+            x=101, y=label,
+            text=f'<b>{av}{sfx}</b>',
+            xanchor='left',
+            font=dict(size=10, color=c2, family='Inter, sans-serif'),
+            showarrow=False,
+        )
+
     return fig
 
 
@@ -800,7 +801,6 @@ def render_form_blocks(home_team, away_team, hs, aws):
             </div>
             """, unsafe_allow_html=True)
 
-""" Test Break """
 # ── HOME PAGE ──────────────────────────────────────────────────────────────
 def show_home():
     import os
