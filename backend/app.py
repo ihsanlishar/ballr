@@ -1,5 +1,5 @@
 from flask import Flask, jsonify
-from football_api import get_fixtures, get_team_stats, get_standings, get_top_scorers, parse_team_form
+from football_api import get_fixtures, get_team_stats, get_standings, get_top_scorers, parse_team_form, get_match_events
 from nlu_api import get_both_team_nlu
 from monte_carlo import run_simulation
 import os
