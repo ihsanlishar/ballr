@@ -230,10 +230,8 @@ if 'selected_match' not in st.session_state:
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 def get_local_tz():
-    try:
-        return datetime.now().astimezone().tzinfo
-    except:
-        return timezone.utc
+    from datetime import timezone, timedelta
+    return timezone(timedelta(hours=-8))
 
 def fmt_date_local(iso):
     try:
