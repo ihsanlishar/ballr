@@ -1,7 +1,8 @@
 from flask import Flask, jsonify
-from football_api import get_fixtures, get_team_stats, get_standings, get_top_scorers, parse_team_form, get_match_events
+from football_api import get_fixtures, get_team_stats, get_standings, get_top_scorers, parse_team_form
 from nlu_api import get_both_team_nlu
 from monte_carlo import run_simulation
+import os
 
 app = Flask(__name__)
 
@@ -58,7 +59,7 @@ def match(home_id, away_id):
         'nlu': nlu,
         'simulation': simulation,
         'events': events
-    })
+        })
 
 @app.route('/standings')
 def standings():
