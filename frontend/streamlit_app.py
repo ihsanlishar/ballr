@@ -803,68 +803,101 @@ def render_form_blocks(home_team, away_team, hs, aws):
 
 # ── HOME PAGE ──────────────────────────────────────────────────────────────
 def show_home():
-    # Particle background
+    # CSS background animation
     st.markdown("""
-    <canvas id="ballr-particles" style="
-        position:fixed;top:0;left:0;width:100%;height:100%;
-        pointer-events:none;z-index:0;opacity:0.45;
-    "></canvas>
-    <script>
-    (function() {
-        const canvas = document.getElementById('ballr-particles');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-
-        function resize() {
-            canvas.width  = window.innerWidth;
-            canvas.height = window.innerHeight;
+    <style>
+        /* Orb container fixed behind everything */
+        .ballr-bg {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
         }
-        resize();
-        window.addEventListener('resize', resize);
-
-        const COUNT = 72;
-        const particles = Array.from({length: COUNT}, () => ({
-            x:    Math.random() * canvas.width,
-            y:    Math.random() * canvas.height,
-            r:    Math.random() * 1.4 + 0.3,
-            dx:   (Math.random() - 0.5) * 0.28,
-            dy:   (Math.random() - 0.5) * 0.28,
-            alpha: Math.random() * 0.5 + 0.08,
-        }));
-
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            particles.forEach(p => {
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(74, 158, 255, ${p.alpha})`;
-                ctx.fill();
-                p.x += p.dx;
-                p.y += p.dy;
-                if (p.x < -4)               p.x = canvas.width  + 4;
-                if (p.x > canvas.width + 4)  p.x = -4;
-                if (p.y < -4)               p.y = canvas.height + 4;
-                if (p.y > canvas.height + 4) p.y = -4;
-            });
-            for (let i = 0; i < particles.length; i++) {
-                for (let j = i + 1; j < particles.length; j++) {
-                    const a = particles[i], b = particles[j];
-                    const dist = Math.hypot(a.x - b.x, a.y - b.y);
-                    if (dist < 110) {
-                        ctx.beginPath();
-                        ctx.moveTo(a.x, a.y);
-                        ctx.lineTo(b.x, b.y);
-                        ctx.strokeStyle = `rgba(30, 45, 69, ${0.6 * (1 - dist / 110)})`;
-                        ctx.lineWidth = 0.5;
-                        ctx.stroke();
-                    }
-                }
-            }
-            requestAnimationFrame(draw);
+        .ballr-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.07;
+            animation: orb-drift linear infinite;
         }
-        draw();
-    })();
-    </script>
+        .ballr-orb-1 {
+            width: 520px; height: 520px;
+            background: #1a4a8a;
+            top: -120px; left: -80px;
+            animation-duration: 28s;
+            animation-delay: 0s;
+        }
+        .ballr-orb-2 {
+            width: 380px; height: 380px;
+            background: #0a2a5e;
+            top: 40%; right: -60px;
+            animation-duration: 22s;
+            animation-delay: -8s;
+        }
+        .ballr-orb-3 {
+            width: 300px; height: 300px;
+            background: #0d3470;
+            bottom: -80px; left: 35%;
+            animation-duration: 34s;
+            animation-delay: -14s;
+        }
+        .ballr-orb-4 {
+            width: 200px; height: 200px;
+            background: #4a9eff;
+            top: 30%; left: 25%;
+            animation-duration: 18s;
+            animation-delay: -5s;
+            opacity: 0.04;
+        }
+        /* Star dots — pure CSS, no JS */
+        .ballr-stars {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-image:
+                radial-gradient(1px 1px at 12% 18%, rgba(74,158,255,0.35) 0%, transparent 100%),
+                radial-gradient(1px 1px at 28% 72%, rgba(74,158,255,0.25) 0%, transparent 100%),
+                radial-gradient(1.5px 1.5px at 44% 11%, rgba(74,158,255,0.4) 0%, transparent 100%),
+                radial-gradient(1px 1px at 67% 55%, rgba(74,158,255,0.3) 0%, transparent 100%),
+                radial-gradient(1px 1px at 81% 29%, rgba(74,158,255,0.2) 0%, transparent 100%),
+                radial-gradient(1.5px 1.5px at 91% 78%, rgba(74,158,255,0.35) 0%, transparent 100%),
+                radial-gradient(1px 1px at 55% 88%, rgba(74,158,255,0.25) 0%, transparent 100%),
+                radial-gradient(1px 1px at 7%  61%, rgba(74,158,255,0.2) 0%, transparent 100%),
+                radial-gradient(1px 1px at 38% 43%, rgba(74,158,255,0.15) 0%, transparent 100%),
+                radial-gradient(1.5px 1.5px at 74% 8%,  rgba(74,158,255,0.35) 0%, transparent 100%),
+                radial-gradient(1px 1px at 19% 91%, rgba(74,158,255,0.2) 0%, transparent 100%),
+                radial-gradient(1px 1px at 62% 34%, rgba(74,158,255,0.25) 0%, transparent 100%),
+                radial-gradient(1px 1px at 88% 50%, rgba(74,158,255,0.15) 0%, transparent 100%),
+                radial-gradient(1.5px 1.5px at 33% 25%, rgba(74,158,255,0.3) 0%, transparent 100%),
+                radial-gradient(1px 1px at 50% 65%, rgba(74,158,255,0.2) 0%, transparent 100%),
+                radial-gradient(1px 1px at 77% 82%, rgba(74,158,255,0.25) 0%, transparent 100%),
+                radial-gradient(1px 1px at 4%  38%, rgba(74,158,255,0.2) 0%, transparent 100%),
+                radial-gradient(1.5px 1.5px at 96% 14%, rgba(74,158,255,0.3) 0%, transparent 100%),
+                radial-gradient(1px 1px at 15% 50%, rgba(74,158,255,0.15) 0%, transparent 100%),
+                radial-gradient(1px 1px at 85% 95%, rgba(74,158,255,0.2) 0%, transparent 100%);
+            animation: stars-twinkle 6s ease-in-out infinite alternate;
+        }
+        @keyframes orb-drift {
+            0%   { transform: translate(0px, 0px) scale(1); }
+            25%  { transform: translate(30px, -20px) scale(1.04); }
+            50%  { transform: translate(15px, 35px) scale(0.97); }
+            75%  { transform: translate(-25px, 10px) scale(1.02); }
+            100% { transform: translate(0px, 0px) scale(1); }
+        }
+        @keyframes stars-twinkle {
+            0%   { opacity: 0.6; }
+            100% { opacity: 1.0; }
+        }
+    </style>
+    <div class="ballr-bg">
+        <div class="ballr-stars"></div>
+        <div class="ballr-orb ballr-orb-1"></div>
+        <div class="ballr-orb ballr-orb-2"></div>
+        <div class="ballr-orb ballr-orb-3"></div>
+        <div class="ballr-orb ballr-orb-4"></div>
+    </div>
     """, unsafe_allow_html=True)
 
     import os
