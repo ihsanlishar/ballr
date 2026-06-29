@@ -706,40 +706,40 @@ def render_key_factors(home_team, away_team, home_stats, away_stats, nlu, sim):
         better = home_team if nlu_diff > 0 else away_team
         badge_cls = 'kf-badge-pos' if nlu_diff > 0 else 'kf-badge-neg'
         adj = abs(nlu_diff) * 5
-        factors.append({'icon':'🧠','label':'Form Sentiment (Watson NLU)',
+        factors.append({'icon':'','label':'Form Sentiment (Watson NLU)',
             'text': f'<strong>{better}</strong> entered this match in measurably better form. NLU sentiment gap of <strong>{abs(nlu_diff):.2f}</strong> translated to a <strong>~{adj:.1f}%</strong> boost in their projected attacking output.',
             'badge': f'<span class="{badge_cls}">{better} advantage</span>'})
 
     h_cs, a_cs = home_stats['clean_sheet_rate'], away_stats['clean_sheet_rate']
     if abs(h_cs - a_cs) > 0.1:
         stronger_def = home_team if h_cs > a_cs else away_team
-        factors.append({'icon':'🛡️','label':'Defensive Strength',
+        factors.append({'icon':'','label':'Defensive Strength',
             'text': f'<strong>{stronger_def}</strong> kept clean sheets in <strong>{max(h_cs,a_cs)*100:.0f}%</strong> of recent games vs <strong>{min(h_cs,a_cs)*100:.0f}%</strong> — suppressing the opponent\'s expected goals in the simulation.',
             'badge': f'<span class="kf-badge-pos">{stronger_def} tighter defense</span>'})
 
     h_gpg, a_gpg = home_stats['goals_per_game'], away_stats['goals_per_game']
     if abs(h_gpg - a_gpg) > 0.3:
         sharper = home_team if h_gpg > a_gpg else away_team
-        factors.append({'icon':'⚡','label':'Attacking Output',
+        factors.append({'icon':'','label':'Attacking Output',
             'text': f'<strong>{sharper}</strong> averaged <strong>{max(h_gpg,a_gpg):.1f} goals/game</strong> in recent form vs <strong>{min(h_gpg,a_gpg):.1f}</strong> — raising their base xG in the model.',
             'badge': f'<span class="kf-badge-pos">{sharper} more clinical</span>'})
 
     h_gd, a_gd = home_stats['gd_per_game'], away_stats['gd_per_game']
     if abs(h_gd - a_gd) > 0.5:
         dominant = home_team if h_gd > a_gd else away_team
-        factors.append({'icon':'📊','label':'Goal Difference Per Game',
+        factors.append({'icon':'','label':'Goal Difference Per Game',
             'text': f'<strong>{dominant}</strong> carried a GD of <strong>{max(h_gd,a_gd):+.2f} per game</strong>. Teams with sustained positive GD tend to outperform raw scoring — the model applies a small multiplier for this.',
             'badge': f'<span class="kf-badge-pos">{dominant} dominant</span>'})
 
     h_wr, a_wr = home_stats['win_rate'], away_stats['win_rate']
     if abs(h_wr - a_wr) > 0.15:
         consistent = home_team if h_wr > a_wr else away_team
-        factors.append({'icon':'🏆','label':'Win Rate',
+        factors.append({'icon':'','label':'Win Rate',
             'text': f'<strong>{consistent}</strong> won <strong>{max(h_wr,a_wr)*100:.0f}%</strong> of recent games vs their opponent\'s <strong>{min(h_wr,a_wr)*100:.0f}%</strong>. The model treats consistent winners as slightly more likely to convert chances.',
             'badge': f'<span class="kf-badge-pos">{consistent} more consistent</span>'})
 
     if not factors:
-        factors.append({'icon':'⚖️','label':'Evenly Matched',
+        factors.append({'icon':'','label':'Evenly Matched',
             'text':'Both teams came in with comparable form, defensive solidity, and attacking output. The model found no dominant statistical edge — a genuinely open match.',
             'badge':'<span class="kf-badge-neu">No clear edge</span>'})
 
@@ -871,7 +871,7 @@ def show_home():
                     st.session_state.page = 'match'
                     st.rerun()
 
-    tab_today, tab_all, tab_group, tab_knockout = st.tabs(["📅  Today","🌍  All Matches","⚽  Group Stage","🏆  Knockout"])
+    tab_today, tab_all, tab_group, tab_knockout = st.tabs([" Today","  All Matches","  Group Stage","  Knockout"])
 
     with tab_today:
         today_matches = [f for f in fixtures if get_match_local_date(f['date']) == today]
