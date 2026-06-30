@@ -1535,10 +1535,13 @@ def show_match():
     if not m:
         st.session_state.page = 'home'
         st.rerun()
+        st.stop()
 
     if st.button("← Back to fixtures"):
         st.session_state.page = 'home'
+        st.session_state.selected_match = None
         st.rerun()
+        st.stop()
 
     with st.spinner("Loading match data..."):
         try:
