@@ -233,13 +233,13 @@ def get_local_tz():
     from datetime import timezone, timedelta
     return timezone(timedelta(hours=-8))
 
-def fmt_date_local(iso):
+def get_match_local_date(iso):
     try:
         dt_utc = datetime.fromisoformat(iso.replace('Z', '+00:00'))
         dt_local = dt_utc.astimezone(get_local_tz())
-        return dt_local.strftime('%a %d %b · %H:%M')
+        return dt_local.date()
     except:
-        return iso
+        return None
 
 def get_match_local_date(iso):
     try:
@@ -916,7 +916,7 @@ def show_home():
 
     fixtures = [f for f in fixtures if f['home'] and f['away']]
     from datetime import timezone
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(timezone(timedelta(hours=-8))).date()
     knockout_stages = {'LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','THIRD_PLACE','FINAL'}
 
     def render_grid(matches, tab_key):
