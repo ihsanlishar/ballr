@@ -1006,7 +1006,23 @@ def show_home():
                 render_grid(ms, f"ko_{s}")
         else:
             render_grid([], "knockout")
+    
+    with tab_model:
+        finished = [f for f in fixtures if f['status'] == 'FINISHED']
+        total = len(finished)
 
+        if not finished:
+            st.markdown('<div class="empty-state"><div class="empty-icon">🤖</div>No results yet — accuracy stats will appear once matches have been played.</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div style="background:linear-gradient(160deg,#0d1a2e 0%,#080d18 100%);border:1px solid #131e30;border-top:3px solid #4a9eff;border-radius:20px;padding:40px;text-align:center;margin-bottom:32px">
+                <div style="font-size:0.72rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#3d4f6b;margin-bottom:8px">Matches Tracked</div>
+                <div style="font-size:5rem;font-weight:900;letter-spacing:-4px;line-height:1;color:#4a9eff">{total}</div>
+                <div style="font-size:0.88rem;color:#3d4f6b;margin-top:8px">finished matches in the database</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            
 # ── FINISHED MATCH ─────────────────────────────────────────────────────────
 def show_finished_match(m, data):
     sim    = data['simulation']
