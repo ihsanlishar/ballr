@@ -1072,6 +1072,52 @@ def show_home():
                 </div>
                 """, unsafe_allow_html=True)
 
+                # ── Outcome Type Breakdown ────────────────────────────────
+                sec_header("Accuracy by Outcome Type")
+                st.markdown('<div style="font-size:0.78rem;color:#3d4f6b;margin-bottom:12px;line-height:1.6">Draws are notoriously the hardest outcome to predict in football — both teams must be evenly matched <em>and</em> neither converts their chances. A lower draw accuracy here is expected, not a sign the model is broken.</div>', unsafe_allow_html=True)
+
+                outcome_stats = {'Win': [0,0], 'Draw': [0,0], 'Loss': [0,0]}
+                for p in predictions:
+                    m = p['match']
+                    hs, aws = m['home_score'], m['away_score']
+                    p1, pd_, p2 = p['p1'], p['pd'], p['p2']
+                    actual = 'home' if hs > aws else 'away' if aws > hs else 'draw'
+                    pred   = 'home' if p1 > p2 and p1 > pd_ else 'away' if p2 > p1 and p2 > pd_ else 'draw'
+                    if actual == 'draw':
+                        outcome_stats['Draw'][1] += 1
+                        if pred == actual: outcome_stats['Draw'][0] += 1
+                    else:
+                        outcome_stats['Win'][1] += 1
+                        if pred == actual: outcome_stats['Win'][0] += 1
+
+                outcome_colors = {'Win': '#4a9eff', 'Draw': '#94a3b8', 'Loss': '#f87171'}
+                fig_outcome = go.Figure()
+                labels  = list(outcome_stats.keys())
+                pcts    = [round(v[0]/v[1]*100) if v[1] else 0 for v in outcome_stats.values()]
+                counts  = [v[1] for v in outcome_stats.values()]
+                colors  = [outcome_colors[l] for l in labels]
+
+                fig_outcome.add_trace(go.Bar(
+                    y=labels, x=pcts, orientation='h',
+                    marker_color=colors,
+                    marker_line=dict(color='#080d18', width=2),
+                    text=[f'{pc}% ({c} matches)' for pc, c in zip(pcts, counts)],
+                    textposition='outside',
+                    textfont=dict(size=11, color='#94a3b8'),
+                    hovertemplate='%{y}: %{x}%<extra></extra>',
+                    width=0.5,
+                ))
+                fig_outcome.update_layout(
+                    height=200, paper_bgcolor='#0d1526', plot_bgcolor='#0d1526',
+                    xaxis=dict(visible=False, range=[0, 130]),
+                    yaxis=dict(tickfont=dict(size=11, color='#94a3b8'), showgrid=False),
+                    font=dict(family='Inter, sans-serif', color='#94a3b8', size=11),
+                    margin=dict(l=16, r=16, t=16, b=16), showlegend=False,
+                )
+                st.plotly_chart(fig_outcome, use_container_width=True, config={'displayModeBar': False})
+
+
+
                 # ── Confidence vs Accuracy ───────────────────────────────
                 sec_header("Confidence vs Outcome")
 
