@@ -1014,14 +1014,31 @@ def show_home():
         if not finished:
             st.markdown('<div class="empty-state"><div class="empty-icon">🤖</div>No results yet — accuracy stats will appear once matches have been played.</div>', unsafe_allow_html=True)
         else:
-            st.markdown(f"""
-            <div style="background:linear-gradient(160deg,#0d1a2e 0%,#080d18 100%);border:1px solid #131e30;border-top:3px solid #4a9eff;border-radius:20px;padding:40px;text-align:center;margin-bottom:32px">
-                <div style="font-size:0.72rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#3d4f6b;margin-bottom:8px">Matches Tracked</div>
-                <div style="font-size:5rem;font-weight:900;letter-spacing:-4px;line-height:1;color:#4a9eff">{total}</div>
-                <div style="font-size:0.88rem;color:#3d4f6b;margin-top:8px">finished matches in the database</div>
-            </div>
-            """, unsafe_allow_html=True)
+            predictions = []
+            with st.spinner("Loading prediction data..."):
+                for m in finished:
+                    try:
+                        r = requests.get(f"{BACKEND}/match/{m['home_id']}/{m['away_id']}", timeout=15)
+                        data = r.json()
+                        sim = data.get('simulation', {})
+                        predictions.append({
+                            'match': m,
+                            'p1':  sim.get('team1_win_pct', 0),
+                            'pd':  sim.get('draw_pct', 0),
+                            'p2':  sim.get('team2_win_pct', 0),
+                            'top_score': sim.get('top_scores', [['—', 0]])[0],
+                        })
+                    except:
+                        pass
 
+            if not predictions:
+                st.error("Could not load prediction data from backend.")
+            else:
+                st.markdown(f"""
+                <div style="color:#4ade80;font-size:0.88rem;padding:12px 0">
+                    ✅ Successfully loaded predictions for {len(predictions)} of {total} finished matches.
+                </div>
+                """, unsafe_allow_html=True)
             
 # ── FINISHED MATCH ─────────────────────────────────────────────────────────
 def show_finished_match(m, data):
