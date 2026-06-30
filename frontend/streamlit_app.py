@@ -966,7 +966,7 @@ def show_home():
                     st.session_state.page = 'match'
                     st.rerun()
 
-    tab_all, tab_today, tab_group, tab_knockout = st.tabs(["  All Matches","  Today","  Group Stage","  Knockout"])
+    tab_all, tab_today, tab_group, tab_knockout, tab_model = st.tabs(["  All Matches","  Today","  Group Stage","  Knockout","  Our Model"])
 
     with tab_today:
         today_matches = [f for f in fixtures if get_match_local_date(f['date']) == today]
