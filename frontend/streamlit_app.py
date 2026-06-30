@@ -1076,21 +1076,18 @@ def show_home():
                 sec_header("Accuracy by Outcome Type")
                 st.markdown('<div style="font-size:0.78rem;color:#3d4f6b;margin-bottom:12px;line-height:1.6">Draws are notoriously the hardest outcome to predict in football — both teams must be evenly matched <em>and</em> neither converts their chances. A lower draw accuracy here is expected, not a sign the model is broken.</div>', unsafe_allow_html=True)
 
-                outcome_stats = {'Win': [0,0], 'Draw': [0,0], 'Loss': [0,0]}
+                outcome_stats = {'Home Win': [0,0], 'Draw': [0,0], 'Away Win': [0,0]}
                 for p in predictions:
                     m = p['match']
                     hs, aws = m['home_score'], m['away_score']
                     p1, pd_, p2 = p['p1'], p['pd'], p['p2']
                     actual = 'home' if hs > aws else 'away' if aws > hs else 'draw'
                     pred   = 'home' if p1 > p2 and p1 > pd_ else 'away' if p2 > p1 and p2 > pd_ else 'draw'
-                    if actual == 'draw':
-                        outcome_stats['Draw'][1] += 1
-                        if pred == actual: outcome_stats['Draw'][0] += 1
-                    else:
-                        outcome_stats['Win'][1] += 1
-                        if pred == actual: outcome_stats['Win'][0] += 1
+                    key = {'home': 'Home Win', 'away': 'Away Win', 'draw': 'Draw'}[actual]
+                    outcome_stats[key][1] += 1
+                    if pred == actual: outcome_stats[key][0] += 1
 
-                outcome_colors = {'Win': '#4a9eff', 'Draw': '#94a3b8', 'Loss': '#f87171'}
+                outcome_colors = {'Home Win': '#4a9eff', 'Draw': '#94a3b8', 'Away Win': '#f87171'}
                 fig_outcome = go.Figure()
                 labels  = list(outcome_stats.keys())
                 pcts    = [round(v[0]/v[1]*100) if v[1] else 0 for v in outcome_stats.values()]
