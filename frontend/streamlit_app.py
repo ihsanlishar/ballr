@@ -230,7 +230,6 @@ if 'selected_match' not in st.session_state:
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 def get_local_tz():
-    from datetime import timezone, timedelta
     return timezone(timedelta(hours=-8))
 
 def get_match_local_date(iso):
@@ -238,13 +237,6 @@ def get_match_local_date(iso):
         dt_utc = datetime.fromisoformat(iso.replace('Z', '+00:00'))
         dt_local = dt_utc.astimezone(get_local_tz())
         return dt_local.date()
-    except:
-        return None
-
-def get_match_local_date(iso):
-    try:
-        dt_utc = datetime.fromisoformat(iso.replace('Z', '+00:00'))
-        return dt_utc.date()
     except:
         return None
     
