@@ -230,7 +230,7 @@ if 'selected_match' not in st.session_state:
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 def get_local_tz():
-    return timezone(timedelta(hours=-8))
+    return timezone(timedelta(hours=-5))
 
 def get_match_local_date(iso):
     try:
@@ -243,8 +243,8 @@ def get_match_local_date(iso):
 def fmt_date_local(iso):
     try:
         dt_utc = datetime.fromisoformat(iso.replace('Z', '+00:00'))
-        pst = timezone(timedelta(hours=-8))
-        dt_local = dt_utc.astimezone(pst)
+        est = timezone(timedelta(hours=-5))
+        dt_local = dt_utc.astimezone(est)
         return dt_local.strftime('%a %d %b · %H:%M')
     except:
         return iso
@@ -935,7 +935,7 @@ def show_home():
             return
 
     fixtures = [f for f in fixtures if f['home'] and f['away']]
-    today = datetime.now(timezone(timedelta(hours=-8))).date()
+    today = datetime.now(timezone(timedelta(hours=-5))).date()
     knockout_stages = {'LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','THIRD_PLACE','FINAL'}
 
     def render_grid(matches, tab_key):
