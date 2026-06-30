@@ -31,4 +31,4 @@ The core AI component is **IBM Watson Natural Language Understanding**, used for
 - **Frontend:** Streamlit, Plotly
 - **Deployment:** Railway (backend), Streamlit Community Cloud (frontend)
 
-## Project structure
+
