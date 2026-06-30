@@ -287,19 +287,18 @@ def plotly_base_layout(fig, height=300):
 
 @st.cache_data(ttl=3600)
 def fetch_all_predictions(match_ids):
-    predictions = []
-    for home_id, away_id, match_data in match_ids:
+    predictions = {}
+    for home_id, away_id, mid in match_ids:
         try:
             r = requests.get(f"{BACKEND}/match/{home_id}/{away_id}", timeout=15)
             data = r.json()
             sim = data.get('simulation', {})
-            predictions.append({
-                'match': match_data,
+            predictions[mid] = {
                 'p1':   sim.get('team1_win_pct', 0),
                 'pd':   sim.get('draw_pct', 0),
                 'p2':   sim.get('team2_win_pct', 0),
                 'top_score': sim.get('top_scores', [['—', 0]])[0],
-            })
+            }
         except:
             pass
     return predictions
@@ -1035,12 +1034,14 @@ def show_home():
         else:
             with st.spinner("Loading prediction data..."):
                 match_ids = tuple((m['home_id'], m['away_id'], m['id']) for m in finished)
-                predictions = fetch_all_predictions(match_ids)
+                pred_lookup = fetch_all_predictions(match_ids)
 
-                # Re-attach full match data by id
-                match_lookup = {m['id']: m for m in finished}
-                for p in predictions:
-                    p['match'] = match_lookup.get(p['match'], p['match'])
+                predictions = []
+                for m in finished:
+                    if m['id'] in pred_lookup:
+                        p = dict(pred_lookup[m['id']])
+                        p['match'] = m
+                        predictions.append(p)
 
             if not predictions:
                 st.error("Could not load prediction data from backend.")
