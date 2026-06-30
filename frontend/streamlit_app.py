@@ -1114,6 +1114,61 @@ def show_home():
                 st.plotly_chart(fig_outcome, use_container_width=True, config={'displayModeBar': False})
 
 
+                # ── Confidence vs Accuracy ───────────────────────────────
+                sec_header("Confidence vs Outcome")
+                st.markdown('<div style="font-size:0.78rem;color:#3d4f6b;margin-bottom:12px;line-height:1.6">This groups every prediction by how confident the model was, then checks how often it was actually right within each group. Green bars above the dotted 50% line are reliable; orange bars below it mean the model struggled in that confidence range. Empty slots mean the model never made a prediction at that confidence level.</div>', unsafe_allow_html=True)
+
+                buckets = {'50–59%': [0,0], '60–69%': [0,0], '70–79%': [0,0], '80–89%': [0,0], '90–100%': [0,0]}
+                def get_bucket(p):
+                    if p >= 90: return '90–100%'
+                    if p >= 80: return '80–89%'
+                    if p >= 70: return '70–79%'
+                    if p >= 60: return '60–69%'
+                    return '50–59%'
+
+                for p in predictions:
+                    m = p['match']
+                    hs, aws = m['home_score'], m['away_score']
+                    p1, pd_, p2 = p['p1'], p['pd'], p['p2']
+                    max_p = max(p1, p2, pd_)
+                    actual = 'home' if hs > aws else 'away' if aws > hs else 'draw'
+                    pred   = 'home' if p1 > p2 and p1 > pd_ else 'away' if p2 > p1 and p2 > pd_ else 'draw'
+                    b = get_bucket(max_p)
+                    buckets[b][1] += 1
+                    if pred == actual: buckets[b][0] += 1
+
+                b_labels, b_pcts, b_counts = [], [], []
+                for label, (c, t) in buckets.items():
+                    if t > 0:
+                        b_labels.append(label)
+                        b_pcts.append(round(c/t*100))
+                        b_counts.append(t)
+                bar_colors = ['#4ade80' if pc >= 60 else '#f59e0b' if pc >= 40 else '#f87171' for pc in b_pcts]
+
+                fig_conf = go.Figure()
+                fig_conf.add_trace(go.Bar(
+                    x=b_labels, y=b_pcts,
+                    marker_color=bar_colors,
+                    marker_line=dict(color='#080d18', width=2),
+                    text=[f'{pc}% ({c})' for pc, c in zip(b_pcts, b_counts)],
+                    textposition='outside',
+                    textfont=dict(size=11, color='#94a3b8'),
+                    hovertemplate='Confidence: %{x}<br>Accuracy: %{y}%<extra></extra>',
+                    width=0.55,
+                ))
+                fig_conf.add_hline(y=50, line_dash='dot', line_color='#1e2d45', line_width=1,
+                    annotation_text='50% baseline', annotation_font_size=9,
+                    annotation_font_color='#3d4f6b', annotation_position='top right')
+                fig_conf.update_layout(
+                    height=280, paper_bgcolor='#0d1526', plot_bgcolor='#0d1526',
+                    xaxis=dict(tickfont=dict(size=10, color='#64748b'), showgrid=False),
+                    yaxis=dict(tickfont=dict(size=9, color='#3d4f6b'), showgrid=True, gridcolor='#0f1626',
+                               zeroline=False, range=[0,115], ticksuffix='%'),
+                    font=dict(family='Inter, sans-serif', color='#94a3b8', size=11),
+                    margin=dict(l=32, r=16, t=24, b=16), showlegend=False,
+                )
+                st.plotly_chart(fig_conf, use_container_width=True, config={'displayModeBar': False})
+
                 # ── Calibration Curve ─────────────────────────────────────
                 sec_header("Is the Model Well-Calibrated?")
                 st.markdown('<div style="font-size:0.78rem;color:#3d4f6b;margin-bottom:12px;line-height:1.6">A well-calibrated model\'s confidence should match reality — if it says "70% chance" across many matches, that side should win roughly 70% of the time. The dotted line shows perfect calibration; points above it mean the model is underconfident, points below mean it\'s overconfident.</div>', unsafe_allow_html=True)
@@ -1167,59 +1222,9 @@ def show_home():
                 st.plotly_chart(fig_calib, use_container_width=True, config={'displayModeBar': False})
                 st.markdown('<div style="font-size:0.68rem;color:#1e2d45;margin-top:-8px;margin-bottom:16px">Marker size reflects how many matches fall in that confidence range — small markers mean fewer data points and less reliable signal.</div>', unsafe_allow_html=True)
 
-                # ── Confidence vs Accuracy ───────────────────────────────
-                sec_header("Confidence vs Outcome")
-
-                buckets = {'50–59%': [0,0], '60–69%': [0,0], '70–79%': [0,0], '80–89%': [0,0], '90–100%': [0,0]}
-                def get_bucket(p):
-                    if p >= 90: return '90–100%'
-                    if p >= 80: return '80–89%'
-                    if p >= 70: return '70–79%'
-                    if p >= 60: return '60–69%'
-                    return '50–59%'
-
-                for p in predictions:
-                    m = p['match']
-                    hs, aws = m['home_score'], m['away_score']
-                    p1, pd_, p2 = p['p1'], p['pd'], p['p2']
-                    max_p = max(p1, p2, pd_)
-                    actual = 'home' if hs > aws else 'away' if aws > hs else 'draw'
-                    pred   = 'home' if p1 > p2 and p1 > pd_ else 'away' if p2 > p1 and p2 > pd_ else 'draw'
-                    b = get_bucket(max_p)
-                    buckets[b][1] += 1
-                    if pred == actual: buckets[b][0] += 1
-
-                b_labels = list(buckets.keys())
-                b_pcts   = [round(v[0]/v[1]*100) if v[1] else 0 for v in buckets.values()]
-                b_counts = [v[1] for v in buckets.values()]
-                bar_colors = ['#4ade80' if pc >= 60 else '#f59e0b' if pc >= 40 else '#f87171' for pc in b_pcts]
-
-                fig_conf = go.Figure()
-                fig_conf.add_trace(go.Bar(
-                    x=b_labels, y=b_pcts,
-                    marker_color=bar_colors,
-                    marker_line=dict(color='#080d18', width=2),
-                    text=[f'{pc}% ({c})' for pc, c in zip(b_pcts, b_counts)],
-                    textposition='outside',
-                    textfont=dict(size=11, color='#94a3b8'),
-                    hovertemplate='Confidence: %{x}<br>Accuracy: %{y}%<extra></extra>',
-                    width=0.55,
-                ))
-                fig_conf.add_hline(y=50, line_dash='dot', line_color='#1e2d45', line_width=1,
-                    annotation_text='50% baseline', annotation_font_size=9,
-                    annotation_font_color='#3d4f6b', annotation_position='top right')
-                fig_conf.update_layout(
-                    height=280, paper_bgcolor='#0d1526', plot_bgcolor='#0d1526',
-                    xaxis=dict(tickfont=dict(size=10, color='#64748b'), showgrid=False),
-                    yaxis=dict(tickfont=dict(size=9, color='#3d4f6b'), showgrid=True, gridcolor='#0f1626',
-                               zeroline=False, range=[0,115], ticksuffix='%'),
-                    font=dict(family='Inter, sans-serif', color='#94a3b8', size=11),
-                    margin=dict(l=32, r=16, t=24, b=16), showlegend=False,
-                )
-                st.plotly_chart(fig_conf, use_container_width=True, config={'displayModeBar': False})
-
                 # ── Aggregate Score Heatmap: Predicted vs Actual ─────────
                 sec_header("Predicted vs Actual Scorelines · All Matches")
+                st.markdown('<div style="font-size:0.78rem;color:#3d4f6b;margin-bottom:12px;line-height:1.6">Each grid shows how often a scoreline appeared — left is what the model predicted most often across all matches, right is what actually happened. Compare the two: if the bright cells line up in roughly the same spots, the model is capturing real scoring patterns. The model leaning heavily on a few "safe" scorelines (like 1-0 or 1-1) while reality is more spread out is common and expected.</div>', unsafe_allow_html=True)
 
                 max_goals = 5
                 pred_grid  = [[0]*(max_goals+1) for _ in range(max_goals+1)]
