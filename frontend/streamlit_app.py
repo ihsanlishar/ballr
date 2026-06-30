@@ -1114,6 +1114,58 @@ def show_home():
                 st.plotly_chart(fig_outcome, use_container_width=True, config={'displayModeBar': False})
 
 
+                # ── Calibration Curve ─────────────────────────────────────
+                sec_header("Is the Model Well-Calibrated?")
+                st.markdown('<div style="font-size:0.78rem;color:#3d4f6b;margin-bottom:12px;line-height:1.6">A well-calibrated model\'s confidence should match reality — if it says "70% chance" across many matches, that side should win roughly 70% of the time. The dotted line shows perfect calibration; points above it mean the model is underconfident, points below mean it\'s overconfident.</div>', unsafe_allow_html=True)
+
+                calib_buckets = {10:[0,0],20:[0,0],30:[0,0],40:[0,0],50:[0,0],60:[0,0],70:[0,0],80:[0,0],90:[0,0],100:[0,0]}
+                def calib_bucket(p):
+                    return min(int(p // 10) * 10 + 10, 100)
+
+                for p in predictions:
+                    m = p['match']
+                    hs, aws = m['home_score'], m['away_score']
+                    p1, pd_, p2 = p['p1'], p['pd'], p['p2']
+                    actual = 'home' if hs > aws else 'away' if aws > hs else 'draw'
+                    pred   = 'home' if p1 > p2 and p1 > pd_ else 'away' if p2 > p1 and p2 > pd_ else 'draw'
+                    max_p  = max(p1, p2, pd_)
+                    b = calib_bucket(max_p)
+                    calib_buckets[b][1] += 1
+                    if pred == actual: calib_buckets[b][0] += 1
+
+                calib_x, calib_y, calib_n = [], [], []
+                for b in sorted(calib_buckets.keys()):
+                    correct, total_b = calib_buckets[b]
+                    if total_b > 0:
+                        calib_x.append(b)
+                        calib_y.append(round(correct/total_b*100))
+                        calib_n.append(total_b)
+
+                fig_calib = go.Figure()
+                fig_calib.add_trace(go.Scatter(
+                    x=[0,100], y=[0,100], mode='lines',
+                    line=dict(color='#1e2d45', width=1.5, dash='dot'),
+                    hoverinfo='skip', showlegend=False,
+                ))
+                fig_calib.add_trace(go.Scatter(
+                    x=calib_x, y=calib_y, mode='lines+markers',
+                    line=dict(color='#4a9eff', width=2.5),
+                    marker=dict(size=[max(8, min(n*2, 24)) for n in calib_n], color='#4a9eff',
+                                line=dict(color='#080d18', width=2)),
+                    hovertemplate='Predicted confidence: ~%{x}%<br>Actual accuracy: %{y}%<br>Sample size: %{text}<extra></extra>',
+                    text=calib_n, showlegend=False,
+                ))
+                fig_calib.update_layout(
+                    height=320, paper_bgcolor='#0d1526', plot_bgcolor='#0d1526',
+                    xaxis=dict(title='Predicted Confidence', range=[0,105], ticksuffix='%',
+                               tickfont=dict(size=10, color='#64748b'), showgrid=True, gridcolor='#0f1626'),
+                    yaxis=dict(title='Actual Accuracy', range=[0,105], ticksuffix='%',
+                               tickfont=dict(size=10, color='#64748b'), showgrid=True, gridcolor='#0f1626'),
+                    font=dict(family='Inter, sans-serif', color='#94a3b8', size=11),
+                    margin=dict(l=48, r=24, t=16, b=48), showlegend=False,
+                )
+                st.plotly_chart(fig_calib, use_container_width=True, config={'displayModeBar': False})
+                st.markdown('<div style="font-size:0.68rem;color:#1e2d45;margin-top:-8px;margin-bottom:16px">Marker size reflects how many matches fall in that confidence range — small markers mean fewer data points and less reliable signal.</div>', unsafe_allow_html=True)
 
                 # ── Confidence vs Accuracy ───────────────────────────────
                 sec_header("Confidence vs Outcome")
