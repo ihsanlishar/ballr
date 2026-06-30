@@ -11,7 +11,7 @@ st.set_page_config(
     page_icon="⚽",
     layout="wide"
 )
-print("2nd Test")
+print("2nd Testtt")
 # ── Team colors ────────────────────────────────────────────────────────────
 TEAM_COLORS = {
     'Algeria':              '#006233',
