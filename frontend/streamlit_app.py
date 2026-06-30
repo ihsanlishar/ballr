@@ -240,6 +240,15 @@ def get_match_local_date(iso):
     except:
         return None
     
+def fmt_date_local(iso):
+    try:
+        dt_utc = datetime.fromisoformat(iso.replace('Z', '+00:00'))
+        pst = timezone(timedelta(hours=-8))
+        dt_local = dt_utc.astimezone(pst)
+        return dt_local.strftime('%a %d %b · %H:%M')
+    except:
+        return iso
+    
 def fmt_stage(stage):
     return {
         'GROUP_STAGE':'Group Stage','LAST_32':'Round of 32','LAST_16':'Round of 16',
@@ -907,7 +916,6 @@ def show_home():
             return
 
     fixtures = [f for f in fixtures if f['home'] and f['away']]
-    from datetime import timezone
     today = datetime.now(timezone(timedelta(hours=-8))).date()
     knockout_stages = {'LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','THIRD_PLACE','FINAL'}
 
