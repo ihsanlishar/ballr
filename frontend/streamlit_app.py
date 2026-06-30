@@ -1071,6 +1071,117 @@ def show_home():
                     <div class="stat-box"><div class="stat-val" style="color:#f59e0b">{upsets}<span style="font-size:1rem;color:#1e2d45">/{len(predictions)}</span></div><div class="stat-lbl">Upsets Missed</div></div>
                 </div>
                 """, unsafe_allow_html=True)
+
+                # ── Confidence vs Accuracy ───────────────────────────────
+                sec_header("Confidence vs Outcome")
+
+                buckets = {'50–59%': [0,0], '60–69%': [0,0], '70–79%': [0,0], '80–89%': [0,0], '90–100%': [0,0]}
+                def get_bucket(p):
+                    if p >= 90: return '90–100%'
+                    if p >= 80: return '80–89%'
+                    if p >= 70: return '70–79%'
+                    if p >= 60: return '60–69%'
+                    return '50–59%'
+
+                for p in predictions:
+                    m = p['match']
+                    hs, aws = m['home_score'], m['away_score']
+                    p1, pd_, p2 = p['p1'], p['pd'], p['p2']
+                    max_p = max(p1, p2, pd_)
+                    actual = 'home' if hs > aws else 'away' if aws > hs else 'draw'
+                    pred   = 'home' if p1 > p2 and p1 > pd_ else 'away' if p2 > p1 and p2 > pd_ else 'draw'
+                    b = get_bucket(max_p)
+                    buckets[b][1] += 1
+                    if pred == actual: buckets[b][0] += 1
+
+                b_labels = list(buckets.keys())
+                b_pcts   = [round(v[0]/v[1]*100) if v[1] else 0 for v in buckets.values()]
+                b_counts = [v[1] for v in buckets.values()]
+                bar_colors = ['#4ade80' if pc >= 60 else '#f59e0b' if pc >= 40 else '#f87171' for pc in b_pcts]
+
+                fig_conf = go.Figure()
+                fig_conf.add_trace(go.Bar(
+                    x=b_labels, y=b_pcts,
+                    marker_color=bar_colors,
+                    marker_line=dict(color='#080d18', width=2),
+                    text=[f'{pc}% ({c})' for pc, c in zip(b_pcts, b_counts)],
+                    textposition='outside',
+                    textfont=dict(size=11, color='#94a3b8'),
+                    hovertemplate='Confidence: %{x}<br>Accuracy: %{y}%<extra></extra>',
+                    width=0.55,
+                ))
+                fig_conf.add_hline(y=50, line_dash='dot', line_color='#1e2d45', line_width=1,
+                    annotation_text='50% baseline', annotation_font_size=9,
+                    annotation_font_color='#3d4f6b', annotation_position='top right')
+                fig_conf.update_layout(
+                    height=280, paper_bgcolor='#0d1526', plot_bgcolor='#0d1526',
+                    xaxis=dict(tickfont=dict(size=10, color='#64748b'), showgrid=False),
+                    yaxis=dict(tickfont=dict(size=9, color='#3d4f6b'), showgrid=True, gridcolor='#0f1626',
+                               zeroline=False, range=[0,115], ticksuffix='%'),
+                    font=dict(family='Inter, sans-serif', color='#94a3b8', size=11),
+                    margin=dict(l=32, r=16, t=24, b=16), showlegend=False,
+                )
+                st.plotly_chart(fig_conf, use_container_width=True, config={'displayModeBar': False})
+
+                # ── Aggregate Score Heatmap: Predicted vs Actual ─────────
+                sec_header("Predicted vs Actual Scorelines · All Matches")
+
+                max_goals = 5
+                pred_grid  = [[0]*(max_goals+1) for _ in range(max_goals+1)]
+                actual_grid = [[0]*(max_goals+1) for _ in range(max_goals+1)]
+
+                for p in predictions:
+                    m = p['match']
+                    hs, aws = m['home_score'], m['away_score']
+                    if hs <= max_goals and aws <= max_goals:
+                        actual_grid[aws][hs] += 1
+                    try:
+                        ph, pa = map(int, p['top_score'][0].split('-'))
+                        if ph <= max_goals and pa <= max_goals:
+                            pred_grid[pa][ph] += 1
+                    except:
+                        pass
+
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.markdown('<div style="font-size:0.65rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#3d4f6b;margin-bottom:8px">Model\'s Predicted Scorelines</div>', unsafe_allow_html=True)
+                    fig_pred = go.Figure(go.Heatmap(
+                        z=pred_grid,
+                        x=[str(i) for i in range(max_goals+1)],
+                        y=[str(i) for i in range(max_goals+1)],
+                        text=[[str(v) if v else '' for v in row] for row in pred_grid],
+                        texttemplate='%{text}',
+                        textfont=dict(size=11, color='#ffffff'),
+                        colorscale=[[0,'rgba(8,13,24,1)'],[0.5,'rgba(74,158,255,0.45)'],[1,'rgba(74,158,255,1)']],
+                        showscale=False, xgap=4, ygap=4,
+                        hovertemplate='Score %{x}-%{y}<br>Predicted %{z} times<extra></extra>',
+                    ))
+                    fig_pred.update_layout(height=320, paper_bgcolor='#0d1526', plot_bgcolor='#0d1526',
+                        xaxis=dict(title='Home Goals', tickfont=dict(color='#3d4f6b', size=10)),
+                        yaxis=dict(title='Away Goals', tickfont=dict(color='#3d4f6b', size=10), autorange='reversed'),
+                        font=dict(family='Inter, sans-serif', color='#94a3b8', size=10),
+                        margin=dict(l=40, r=16, t=16, b=40))
+                    st.plotly_chart(fig_pred, use_container_width=True, config={'displayModeBar': False})
+
+                with col_b:
+                    st.markdown('<div style="font-size:0.65rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#3d4f6b;margin-bottom:8px">Actual Scorelines</div>', unsafe_allow_html=True)
+                    fig_act = go.Figure(go.Heatmap(
+                        z=actual_grid,
+                        x=[str(i) for i in range(max_goals+1)],
+                        y=[str(i) for i in range(max_goals+1)],
+                        text=[[str(v) if v else '' for v in row] for row in actual_grid],
+                        texttemplate='%{text}',
+                        textfont=dict(size=11, color='#ffffff'),
+                        colorscale=[[0,'rgba(8,13,24,1)'],[0.5,'rgba(74,222,128,0.45)'],[1,'rgba(74,222,128,1)']],
+                        showscale=False, xgap=4, ygap=4,
+                        hovertemplate='Score %{x}-%{y}<br>Occurred %{z} times<extra></extra>',
+                    ))
+                    fig_act.update_layout(height=320, paper_bgcolor='#0d1526', plot_bgcolor='#0d1526',
+                        xaxis=dict(title='Home Goals', tickfont=dict(color='#3d4f6b', size=10)),
+                        yaxis=dict(title='Away Goals', tickfont=dict(color='#3d4f6b', size=10), autorange='reversed'),
+                        font=dict(family='Inter, sans-serif', color='#94a3b8', size=10),
+                        margin=dict(l=40, r=16, t=16, b=40))
+                    st.plotly_chart(fig_act, use_container_width=True, config={'displayModeBar': False})
 # ── FINISHED MATCH ─────────────────────────────────────────────────────────
 def show_finished_match(m, data):
     sim    = data['simulation']
