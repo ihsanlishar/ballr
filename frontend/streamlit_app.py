@@ -285,6 +285,25 @@ def plotly_base_layout(fig, height=300):
     )
     return fig
 
+@st.cache_data(ttl=3600)
+def fetch_all_predictions(match_ids):
+    predictions = []
+    for home_id, away_id, match_data in match_ids:
+        try:
+            r = requests.get(f"{BACKEND}/match/{home_id}/{away_id}", timeout=15)
+            data = r.json()
+            sim = data.get('simulation', {})
+            predictions.append({
+                'match': match_data,
+                'p1':   sim.get('team1_win_pct', 0),
+                'pd':   sim.get('draw_pct', 0),
+                'p2':   sim.get('team2_win_pct', 0),
+                'top_score': sim.get('top_scores', [['—', 0]])[0],
+            })
+        except:
+            pass
+    return predictions
+
 # ── Chart: Win Probability Donut ───────────────────────────────────────────
 def chart_donut(home_team, away_team, p1, pd_, p2):
     c1 = get_team_color(home_team, other_team=away_team)
@@ -1014,32 +1033,44 @@ def show_home():
         if not finished:
             st.markdown('<div class="empty-state"><div class="empty-icon">🤖</div>No results yet — accuracy stats will appear once matches have been played.</div>', unsafe_allow_html=True)
         else:
-            predictions = []
             with st.spinner("Loading prediction data..."):
-                for m in finished:
-                    try:
-                        r = requests.get(f"{BACKEND}/match/{m['home_id']}/{m['away_id']}", timeout=15)
-                        data = r.json()
-                        sim = data.get('simulation', {})
-                        predictions.append({
-                            'match': m,
-                            'p1':  sim.get('team1_win_pct', 0),
-                            'pd':  sim.get('draw_pct', 0),
-                            'p2':  sim.get('team2_win_pct', 0),
-                            'top_score': sim.get('top_scores', [['—', 0]])[0],
-                        })
-                    except:
-                        pass
+                match_ids = tuple((m['home_id'], m['away_id'], m['id']) for m in finished)
+                predictions = fetch_all_predictions(match_ids)
+
+                # Re-attach full match data by id
+                match_lookup = {m['id']: m for m in finished}
+                for p in predictions:
+                    p['match'] = match_lookup.get(p['match'], p['match'])
 
             if not predictions:
                 st.error("Could not load prediction data from backend.")
             else:
+                correct, score_correct, upsets = 0, 0, 0
+                for p in predictions:
+                    m   = p['match']
+                    hs, aws = m['home_score'], m['away_score']
+                    p1, pd_, p2 = p['p1'], p['pd'], p['p2']
+                    actual = 'home' if hs > aws else 'away' if aws > hs else 'draw'
+                    pred   = 'home' if p1 > p2 and p1 > pd_ else 'away' if p2 > p1 and p2 > pd_ else 'draw'
+                    if pred == actual: correct += 1
+                    if not (pred == actual) and max(p1, p2, pd_) >= 60: upsets += 1
+                    if p['top_score'][0] == f"{hs}-{aws}": score_correct += 1
+
+                accuracy_pct = round(correct / len(predictions) * 100)
+                acc_color = '#4ade80' if accuracy_pct >= 60 else '#f59e0b' if accuracy_pct >= 45 else '#f87171'
+
                 st.markdown(f"""
-                <div style="color:#4ade80;font-size:0.88rem;padding:12px 0">
-                    ✅ Successfully loaded predictions for {len(predictions)} of {total} finished matches.
+                <div style="background:linear-gradient(160deg,#0d1a2e 0%,#080d18 100%);border:1px solid #131e30;border-top:3px solid #4a9eff;border-radius:20px;padding:40px;text-align:center;margin-bottom:24px">
+                    <div style="font-size:0.72rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#3d4f6b;margin-bottom:8px">Overall Prediction Accuracy</div>
+                    <div style="font-size:5rem;font-weight:900;letter-spacing:-4px;line-height:1;color:{acc_color}">{accuracy_pct}%</div>
+                    <div style="font-size:0.88rem;color:#3d4f6b;margin-top:8px">{correct} correct from {len(predictions)} finished matches</div>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px">
+                    <div class="stat-box"><div class="stat-val">{correct}<span style="font-size:1rem;color:#1e2d45">/{len(predictions)}</span></div><div class="stat-lbl">Correct Outcomes</div></div>
+                    <div class="stat-box"><div class="stat-val-green">{score_correct}<span style="font-size:1rem;color:#1e2d45">/{len(predictions)}</span></div><div class="stat-lbl">Exact Score Hits</div></div>
+                    <div class="stat-box"><div class="stat-val" style="color:#f59e0b">{upsets}<span style="font-size:1rem;color:#1e2d45">/{len(predictions)}</span></div><div class="stat-lbl">Upsets Missed</div></div>
                 </div>
                 """, unsafe_allow_html=True)
-            
 # ── FINISHED MATCH ─────────────────────────────────────────────────────────
 def show_finished_match(m, data):
     sim    = data['simulation']
